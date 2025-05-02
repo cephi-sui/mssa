@@ -8,5 +8,5 @@ struct Args {
 }
 fn main() {
     let args = Args::parse();
-    Sequence::read_from_path(args.fasta_file);
+    let sequences = Sequence::read_from_path(args.fasta_file);
 }
