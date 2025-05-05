@@ -18,6 +18,8 @@ impl Sequence {
                 Some(Self {
                     description: split.next()?.to_string(),
                     representation: split.collect::<String>().into_bytes(),
-                })}).collect())
+                })
+            })
+            .collect())
     }
 }
