@@ -9,6 +9,8 @@ use kmer::{construct_super_kmers, to_kmers};
 
 mod kmer;
 
+mod sa;
+
 #[derive(Parser)]
 enum Args {
     Build {

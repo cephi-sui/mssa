@@ -12,9 +12,9 @@ pub enum Kmer {
 
 #[derive(Debug)]
 pub struct SuperKmer {
-    start_pos: usize,
-    length: usize,
-    minimizer: Kmer,
+    pub start_pos: usize,
+    pub length: usize,
+    pub minimizer: Kmer,
 }
 
 impl Kmer {
