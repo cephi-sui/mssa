@@ -2,8 +2,11 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
+
 mod fasta;
 use fasta::Sequence;
+
+mod kmer;
 
 #[derive(Parser)]
 struct Args {
