@@ -13,7 +13,13 @@ pub enum Kmer {
 pub struct SuperKmer {
     start_pos: usize,
     length: usize,
-    minimizer: Vec<u8>,
+    minimizer: Kmer,
+}
+
+impl Kmer {
+    pub fn cmp(&self, other: &Self, representation: &[u8]) -> Ordering {
+        todo!()
+    }
 }
 
 pub fn to_kmers(representation: &[u8], k: usize) -> Vec<Kmer> {
@@ -33,8 +39,7 @@ pub fn to_kmers(representation: &[u8], k: usize) -> Vec<Kmer> {
 }
 
 // Based on DP solution at https://algo.monster/liteproblems/239
-pub fn construct_super_kmers(kmers: &[Kmer], k: usize) -> Vec<SuperKmer> {
-    todo!();
+pub fn construct_super_kmers(kmers: &[Kmer], representation: &[u8], k: usize) -> Vec<SuperKmer> {
     let mut index_queue: VecDeque<usize> = VecDeque::new();
 
     let ret: Vec<SuperKmer> = Vec::new();
@@ -45,7 +50,16 @@ pub fn construct_super_kmers(kmers: &[Kmer], k: usize) -> Vec<SuperKmer> {
         }
 
         while index_queue.len() > 0 {
-            // if kmers[*index_queue.iter().last().unwrap()] {
+            let ord = kmers[*index_queue.iter().last().unwrap()].cmp(kmer, representation);
+            if ord == Ordering::Greater || ord == Ordering::Equal {
+                index_queue.pop_back();
+            }
+        }
+
+        index_queue.push_back(i);
+
+        if i >= k - 1 {
+
         }
     }
 
