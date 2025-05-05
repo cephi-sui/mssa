@@ -44,8 +44,8 @@ impl<'a> Ord for Kmer<'a> {
     }
 }
 
-pub fn to_kmers(representation: &[u8], k: usize) -> Vec<Kmer> {
-    todo!()
+pub fn to_kmers<'a>(representation: &'a [u8], k: usize) -> Vec<Kmer<'a>> {
+    representation.windows(k).map(|slice| Kmer::Data(slice)).collect()
 }
 
 // Based on DP solution at https://algo.monster/liteproblems/239
