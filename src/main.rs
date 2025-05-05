@@ -4,7 +4,7 @@ use anyhow::Result;
 use clap::Parser;
 
 mod fasta;
-use fasta::Sequence;
+use fasta::read_sequences;
 
 mod kmer;
 
@@ -23,7 +23,7 @@ fn main() -> Result<()> {
             fasta_file,
             output_file,
         } => {
-            let sequences = Sequence::read_from_path(fasta_file)?;
+            let sequences = read_sequences(fasta_file)?;
         }
     }
 

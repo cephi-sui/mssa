@@ -1,27 +1,53 @@
 use anyhow::Result;
-use std::cmp::{Ord, Ordering};
+use std::{
+    cmp::{Ord, Ordering},
+    collections::{VecDeque, vec_deque},
+};
 
-#[derive(Debug, Eq)]
-pub struct Kmer<'a>(&'a [u8]);
- 
-impl<'a, 'b> PartialEq<Kmer<'b>> for Kmer<'a> {
-    fn eq(&self, other: &Kmer<'b>) -> bool {
-        self.0.eq(other.0)
-    }
+#[derive(Debug)]
+pub enum Kmer {
+    Data { start_pos: usize, length: usize },
+    Sentinel,
 }
 
-impl<'a, 'b> PartialOrd<Kmer<'b>> for Kmer<'a> {
-    fn partial_cmp(&self, other: &Kmer<'b>) -> Option<Ordering> {
-        self.0.partial_cmp(other.0)
-    }
+pub struct SuperKmer {
+    start_pos: usize,
+    length: usize,
+    minimizer: Vec<u8>,
 }
 
-impl<'a> Ord for Kmer<'a> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.0.cmp(&other.0)
-    }
+pub fn to_kmers(representation: &[u8], k: usize) -> Vec<Kmer> {
+    let mut kmers: Vec<_> = (0..representation.len())
+        .collect::<Vec<_>>()
+        .windows(k)
+        .map(|slice| Kmer::Data {
+            start_pos: slice[0],
+            length: slice.len(),
+        })
+        .collect();
+
+    // Ensure that we always have the sentinel character
+    kmers.push(Kmer::Sentinel);
+
+    kmers
 }
 
-pub fn to_kmers<'a>(representation: &'a [u8], k: usize) -> Vec<Kmer<'a>> {
-    representation.windows(k).map(|slice| Kmer(slice)).collect()
+// Based on DP solution at https://algo.monster/liteproblems/239
+pub fn construct_super_kmers(kmers: &[Kmer], k: usize) -> Vec<SuperKmer> {
+    todo!();
+    let mut index_queue: VecDeque<usize> = VecDeque::new();
+
+    let ret: Vec<SuperKmer> = Vec::new();
+
+    for (i, kmer) in kmers.iter().enumerate() {
+        if index_queue.get(0) < Some(i - k + 1).as_ref() {
+            index_queue.pop_front();
+        }
+
+        while index_queue.len() > 0 {
+            // if kmers[*index_queue.iter().last().unwrap()] {
+        }
+    }
+
+    ret
 }
