@@ -9,13 +9,23 @@ use fasta::Sequence;
 mod kmer;
 
 #[derive(Parser)]
-struct Args {
-    fasta_file: PathBuf,
+enum Args {
+    Build {
+        fasta_file: PathBuf,
+        output_file: PathBuf,
+    },
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let sequences = Sequence::read_from_path(args.fasta_file)?;
+    match args {
+        Args::Build {
+            fasta_file,
+            output_file,
+        } => {
+            let sequences = Sequence::read_from_path(fasta_file)?;
+        }
+    }
 
     Ok(())
 }
