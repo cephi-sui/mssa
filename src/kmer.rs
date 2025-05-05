@@ -4,7 +4,7 @@ use std::{
     collections::{VecDeque, vec_deque},
 };
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum Kmer {
     Data { start_pos: usize, length: usize },
     Sentinel,
@@ -42,7 +42,7 @@ pub fn to_kmers(representation: &[u8], k: usize) -> Vec<Kmer> {
 pub fn construct_super_kmers(kmers: &[Kmer], representation: &[u8], k: usize) -> Vec<SuperKmer> {
     let mut index_queue: VecDeque<usize> = VecDeque::new();
 
-    let ret: Vec<SuperKmer> = Vec::new();
+    let mut minimums: Vec<Kmer> = Vec::new();
 
     for (i, kmer) in kmers.iter().enumerate() {
         if index_queue.get(0) < Some(i - k + 1).as_ref() {
@@ -59,8 +59,37 @@ pub fn construct_super_kmers(kmers: &[Kmer], representation: &[u8], k: usize) ->
         index_queue.push_back(i);
 
         if i >= k - 1 {
-
+            minimums.push(kmers[index_queue[0]]);
         }
+    }
+
+    let mut ret: Vec<SuperKmer> = Vec::new();
+
+    // De-duplicate the minimums into super kmers
+    let mut count = 1;
+    let mut curr_kmer = &minimums[0];
+    let mut curr_kmer_i = 0;
+    for (i, minimum) in minimums.iter().enumerate().skip(1) {
+        if minimum.cmp(&curr_kmer, representation) == Ordering::Equal {
+            count += 1;
+        } else {
+            // retire the previous minimum
+            ret.push(SuperKmer {
+                start_pos: curr_kmer_i,
+                length: count,
+                minimizer: curr_kmer.clone(),
+            });
+            count = 1;
+            curr_kmer = minimum;
+            curr_kmer_i = i;
+        }
+    }
+    if count != 0 {
+        ret.push(SuperKmer {
+            start_pos: curr_kmer_i,
+            length: count,
+            minimizer: curr_kmer.clone(),
+        });
     }
 
     ret
