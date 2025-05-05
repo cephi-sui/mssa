@@ -28,12 +28,6 @@ fn main() -> Result<()> {
         } => {
             let sequences = read_sequences(fasta_file)?;
 
-            let k = 3;
-            let data: &[u8] = &sequences[0].representation;
-            let kmers = to_kmers(data, k);
-            let super_kmers = construct_super_kmers(&kmers, data, k);
-
-            println!("{:?}", super_kmers);
         }
     }
 
