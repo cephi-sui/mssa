@@ -4,8 +4,8 @@ use std::path::Path;
 
 #[derive(Debug)]
 pub struct Sequence {
-    description: String,
-    representation: Vec<u8>,
+    pub description: String,
+    pub representation: Vec<u8>,
 }
 
 impl Sequence {
