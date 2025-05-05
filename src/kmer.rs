@@ -10,6 +10,7 @@ pub enum Kmer {
     Sentinel,
 }
 
+#[derive(Debug)]
 pub struct SuperKmer {
     start_pos: usize,
     length: usize,
@@ -45,21 +46,8 @@ pub fn construct_super_kmers(kmers: &[Kmer], representation: &[u8], k: usize) ->
     let mut minimums: Vec<Kmer> = Vec::new();
 
     for (i, kmer) in kmers.iter().enumerate() {
-        if index_queue.get(0) < Some(i - k + 1).as_ref() {
-            index_queue.pop_front();
-        }
-
         while index_queue.len() > 0 {
-            let ord = kmers[*index_queue.iter().last().unwrap()].cmp(kmer, representation);
-            if ord == Ordering::Greater || ord == Ordering::Equal {
-                index_queue.pop_back();
-            }
-        }
-
-        index_queue.push_back(i);
-
-        if i >= k - 1 {
-            minimums.push(kmers[index_queue[0]]);
+            let popped = index_queue.pop_back().unwrap();
         }
     }
 
