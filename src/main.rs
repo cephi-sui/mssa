@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use anyhow::Result;
 use clap::Parser;
 mod fasta;
 use fasta::Sequence;
@@ -9,7 +10,9 @@ struct Args {
     fasta_file: PathBuf,
 }
 
-fn main() {
+fn main() -> Result<()> {
     let args = Args::parse();
-    let sequences = Sequence::read_from_path(args.fasta_file);
+    let sequences = Sequence::read_from_path(args.fasta_file)?;
+
+    Ok(())
 }
