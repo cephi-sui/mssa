@@ -74,23 +74,18 @@ pub fn to_kmers<'a>(representation: &'a [u8], k: usize) -> Vec<Kmer<'a>> {
 // (Not currently) Based on DP solution at https://algo.monster/liteproblems/239
 pub fn construct_super_kmers<'a>(kmers: &'a [Kmer], k: usize, w: usize) -> Vec<SuperKmer<'a>> {
     assert!(kmers.len() >= w);
-    /*
-    let x: Vec<_> = kmers
-        .windows(k)
-        .map(|window| window.iter().min().expect("k should not be 0"))
-        .collect();
-    */
+
     let mut result = Vec::new();
     let mut minimizer = (0, &kmers[0]);
 
     for idx in 0..w {
-        if kmers[idx].cmp(&minimizer.1) == Ordering::Less {
+        if kmers[idx].stupid_cmp(&minimizer.1) == Ordering::Less {
             minimizer = (idx, &kmers[idx]);
         }
     }
 
     for idx in w..kmers.len() {
-        if kmers[idx].cmp(&minimizer.1) == Ordering::Less {
+        if kmers[idx].stupid_cmp(&minimizer.1) == Ordering::Less {
             result.push(SuperKmer{start_pos: minimizer.0, length: idx - minimizer.0, minimizer: kmers[idx].clone()});
             minimizer = (idx, &kmers[idx]);
         }
