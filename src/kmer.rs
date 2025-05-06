@@ -4,7 +4,7 @@ use std::{
     collections::{VecDeque, vec_deque},
 };
 
-#[derive(Debug, Eq)]
+#[derive(Debug)]
 pub enum Kmer<'a> {
     Data(&'a [u8]),
     Sentinel,
@@ -17,23 +17,7 @@ pub struct SuperKmer<'a> {
     pub minimizer: Kmer<'a>,
 }
 
-impl<'a, 'b> PartialEq<Kmer<'b>> for Kmer<'a> {
-    fn eq(&self, other: &Kmer<'b>) -> bool {
-        match (self, other) {
-            (&Kmer::Sentinel, &Kmer::Sentinel) => true,
-            (&Kmer::Data(d1), &Kmer::Data(d2)) => d1 == d2,
-            _ => false,
-        }
-    }
-}
-
-impl<'a, 'b> PartialOrd<Kmer<'b>> for Kmer<'a> {
-    fn partial_cmp(&self, other: &Kmer<'b>) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<'a> Ord for Kmer<'a> {
+impl<'a> Kmer<'a> {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
             (&Kmer::Sentinel, &Kmer::Sentinel) => Ordering::Equal,
@@ -41,6 +25,12 @@ impl<'a> Ord for Kmer<'a> {
             (&Kmer::Sentinel, &Kmer::Data(_)) => Ordering::Greater,
             (&Kmer::Data(_), &Kmer::Sentinel) => Ordering::Less,
         }
+    }
+}
+
+impl<'a> SuperKmer<'a> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.minimizer.cmp(&other.minimizer)
     }
 }
 

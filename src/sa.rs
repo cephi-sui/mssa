@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::kmer::{SuperKmer, Kmer};
+use crate::kmer::{Kmer, SuperKmer};
 
 pub struct SuffixArray(Vec<usize>);
 
@@ -10,12 +10,12 @@ impl SuffixArray {
     }
 
     pub fn from_superkmers(super_rep: &[SuperKmer], rep: &[u8]) -> Self {
-        todo!();
-        /*
-        let suffixes: Vec<usize> = (0..super_rep.len()).map(|i| &super_rep[i..super_rep.len()]).collect();
-        suffixes.sort_by(|a, b| a.minimizer.cmp(&b.minimizer, rep));
-        Self(suffixes)
-        */
+        let mut suffixes: Vec<&[SuperKmer]> = (0..super_rep.len())
+            .map(|i| &super_rep[i..super_rep.len()])
+            .collect();
+        suffixes.sort();
+        // Self(suffixes)
+        todo!()
     }
 
     /*
