@@ -4,7 +4,7 @@ use std::{
     collections::{vec_deque, VecDeque},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 pub enum Kmer<'a> {
     Data(&'a [u8]),
     Sentinel,
@@ -17,12 +17,12 @@ pub struct SuperKmer<'a> {
     pub minimizer: Kmer<'a>,
 }
 
-trait StupidOrd {
-    fn cmp(&self, other: &Self) -> Ordering;
+pub trait StupidOrd {
+    fn stupid_cmp(&self, other: &Self) -> Ordering;
 }
 
 impl<'a> StupidOrd for Kmer<'a> {
-    fn cmp(&self, other: &Self) -> Ordering {
+    fn stupid_cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
             (&Kmer::Sentinel, &Kmer::Sentinel) => Ordering::Equal,
             (&Kmer::Data(d1), &Kmer::Data(d2)) => d1.cmp(d2),
@@ -33,14 +33,14 @@ impl<'a> StupidOrd for Kmer<'a> {
 }
 
 impl<'a> StupidOrd for SuperKmer<'a> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.minimizer.cmp(&other.minimizer)
+    fn stupid_cmp(&self, other: &Self) -> Ordering {
+        self.minimizer.stupid_cmp(&other.minimizer)
     }
 }
 
 impl<'a> StupidOrd for &[Kmer<'a>] {
-    // Ripped from core/slice/cmp.rs
-    fn cmp(&self, other: &Self) -> Ordering {
+    fn stupid_cmp(&self, other: &Self) -> Ordering {
+        // Ripped from core/slice/cmp.rs
         let l = cmp::min(self.len(), other.len());
 
         // Slice to the loop iteration range to enable bound check
@@ -49,13 +49,21 @@ impl<'a> StupidOrd for &[Kmer<'a>] {
         let rhs = &other[..l];
 
         for i in 0..l {
-            match lhs[i].cmp(&rhs[i]) {
+            match lhs[i].stupid_cmp(&rhs[i]) {
                 Ordering::Equal => (),
                 non_eq => return non_eq,
             }
         }
 
         self.len().cmp(&other.len())
+    }
+}
+
+impl<'a> StupidOrd for &[SuperKmer<'a>] {
+    fn stupid_cmp(&self, other: &Self) -> Ordering {
+        let s = self.iter().map(|sk| sk.minimizer).collect::<Vec<_>>();
+        let o = other.iter().map(|sk| sk.minimizer).collect::<Vec<_>>();
+        s.as_slice().stupid_cmp(&o.as_slice())
     }
 }
 
