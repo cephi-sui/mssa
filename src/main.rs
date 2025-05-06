@@ -27,7 +27,10 @@ fn main() -> Result<()> {
             output_file,
         } => {
             let sequences = read_sequences(fasta_file)?;
-
+            println!("{:?}", sequences[0].representation.len());
+            let kmers = to_kmers(&sequences[0].representation, 10);
+            let s_kmers = construct_super_kmers(&kmers, 10);
+            println!("{:?}", s_kmers);
         }
     }
 

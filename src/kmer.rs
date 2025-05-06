@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::{
     cmp::{self, Ord, Ordering},
-    collections::{vec_deque, VecDeque},
+    collections::{VecDeque, vec_deque},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -68,28 +68,65 @@ impl<'a> StupidOrd for &[SuperKmer<'a>] {
 }
 
 pub fn to_kmers<'a>(representation: &'a [u8], k: usize) -> Vec<Kmer<'a>> {
-    representation.windows(k).map(|slice| Kmer::Data(slice)).collect()
+    representation
+        .windows(k)
+        .map(|slice| Kmer::Data(slice))
+        .collect()
 }
 
 // (Not currently) Based on DP solution at https://algo.monster/liteproblems/239
-pub fn construct_super_kmers<'a>(kmers: &'a [Kmer], k: usize, w: usize) -> Vec<SuperKmer<'a>> {
+pub fn construct_super_kmers<'a>(kmers: &'a [Kmer], w: usize) -> Vec<SuperKmer<'a>> {
     assert!(kmers.len() >= w);
 
     let mut result = Vec::new();
-    let mut minimizer = (0, &kmers[0]);
+    //let mut start_pos = 0;
+    //let mut minimizer = &kmers[0];
 
+    let minimizers = kmers
+        .iter()
+        .enumerate()
+        .collect::<Vec<_>>()
+        .windows(w)
+        .map(|slice| {
+            let mut minimizer = slice[0];
+            for (i, kmer) in slice.iter().skip(1) {
+                if kmer.stupid_cmp(&minimizer.1) == Ordering::Less {
+                    minimizer = (*i, kmer);
+                }
+            }
+            minimizer
+        });
+
+    for minimizer in minizers {
+
+    }
+
+    /*
+    // Obtain minimizer for first w K-mers.
     for idx in 0..w {
-        if kmers[idx].stupid_cmp(&minimizer.1) == Ordering::Less {
-            minimizer = (idx, &kmers[idx]);
+        if kmers[idx].stupid_cmp(&minimizer) == Ordering::Less {
+            minimizer = &kmers[idx];
         }
     }
 
-    for idx in w..kmers.len() {
-        if kmers[idx].stupid_cmp(&minimizer.1) == Ordering::Less {
-            result.push(SuperKmer{start_pos: minimizer.0, length: idx - minimizer.0, minimizer: kmers[idx].clone()});
-            minimizer = (idx, &kmers[idx]);
+    // Obtain minimizers for remaining windows excluding the last.
+    for idx in w..kmers.len() - 1 {
+        if kmers[idx].stupid_cmp(&minimizer) == Ordering::Less {
+            result.push(SuperKmer{start_pos, length: idx - start_pos, minimizer: minimizer.clone()});
+            start_pos = idx;
+            minimizer = &kmers[idx];
         }
+    }
+
+    // Obtain minimizer for last window, pushing if it is different from the previous.
+    let idx = kmers.len() - 1;
+    if kmers[idx].stupid_cmp(&minimizer) == Ordering::Less {
+        result.push(SuperKmer{start_pos, length: idx - start_pos, minimizer: minimizer.clone()});
+        start_pos = idx;
+        minimizer = &kmers[idx];
+        result.push(SuperKmer{start_pos, length: idx - start_pos, minimizer: minimizer.clone()});
     }
 
     result
+    */
 }
