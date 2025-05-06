@@ -13,7 +13,7 @@ impl SuffixArray {
         let mut suffixes: Vec<&[SuperKmer]> = (0..super_rep.len())
             .map(|i| &super_rep[i..super_rep.len()])
             .collect();
-        suffixes.sort_by(|&a, &b| {});
+        //suffixes.sort_by(|&a, &b| {});
         // Self(suffixes)
         todo!()
     }
