@@ -1,11 +1,10 @@
 use core::fmt;
 
 use bitvec::prelude::*;
-use funty::Unsigned;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct IntVec {
     inner: BitVec,
     bits: usize,

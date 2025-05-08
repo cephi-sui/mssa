@@ -1,16 +1,26 @@
-use std::{cmp::Ordering, collections::HashSet, fmt};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeSet, HashSet},
+    fmt, iter,
+};
 
-use bimap::BiMap;
+use bimap::{BiBTreeMap, BiMap};
 use itertools::Itertools;
 
 use crate::int_vec::IntVec;
 
+/// A mapping from u8s in the original string to
+/// u8s that have been compressed into a smaller domain
+struct Alphabet(BiMap<u8, u8>);
+
 /// Represents a single k-mer.
+#[derive(Clone)]
 enum Kmer {
     Data(IntVec),
     Sentinel,
 }
 
+#[derive(Debug)]
 pub struct SuperKmer {
     // The starting position of the super-kmer in the underlying string
     start_pos: usize,
@@ -22,14 +32,16 @@ pub struct SuperKmer {
     minimizer: Kmer,
 }
 
+// TODO: should SuperKmerSequence be a separate type? That way we
+// could more cleanly keep track of `w`.
+
+#[derive(Debug)]
 pub struct KmerSequence {
+    alphabet: Alphabet,
+
     kmers: Vec<Kmer>,
 
     k: usize,
-
-    /// A mapping from u8s in the original string to
-    /// u8s that have been compressed into a smaller domain
-    alphabet: BiMap<u8, u8>,
 }
 
 impl KmerSequence {
@@ -37,7 +49,9 @@ impl KmerSequence {
         // Construct a mapping from u8 -> compressed u8 of the
         // bytes in the original sequence
         let mut alphabet = BiMap::new();
-        let bytes_seen: HashSet<u8> = HashSet::from_iter(sequence.iter().cloned());
+        // BTreeSet is helpful to keep ordering the same in original
+        // and transformed alphabets
+        let bytes_seen: BTreeSet<u8> = BTreeSet::from_iter(sequence.iter().cloned());
         for (i, b) in bytes_seen.iter().cloned().enumerate() {
             // i should obviously be up to 255 since bytes_seen is a set of unique u8's
             let i: u8 = i.try_into().unwrap();
@@ -65,7 +79,11 @@ impl KmerSequence {
         // Make sure we always have a sentinel kmer
         kmers.push(Kmer::Sentinel);
 
-        Self { kmers, k, alphabet }
+        Self {
+            kmers,
+            k,
+            alphabet: Alphabet(alphabet),
+        }
     }
 
     // Panics if the kmer isn't a part of this KmerSequence
@@ -74,25 +92,20 @@ impl KmerSequence {
             (Kmer::Sentinel, Kmer::Sentinel) => Ordering::Equal,
             (Kmer::Sentinel, _) => Ordering::Greater,
             (_, Kmer::Sentinel) => Ordering::Less,
-            (Kmer::Data(vec1), Kmer::Data(vec2)) => {
-                // Do the comparison in the original string alphabet for now
-                let left = vec1.iter().map(|b| self.alphabet.get_by_right(&b).unwrap());
-                let right = vec2.iter().map(|b| self.alphabet.get_by_right(&b).unwrap());
-
-                left.cmp(right)
-            }
+            (Kmer::Data(d1), Kmer::Data(d2)) => d1.iter().cmp(d2.iter()),
         }
     }
 
+    // TODO: switch from the naive approach to something more efficient
     pub fn compute_super_kmers(&self, w: usize) -> Vec<SuperKmer> {
         assert!(self.kmers.len() >= w);
         assert!(w >= 1);
 
         // Find the minimizers for each k-mer window
-        let minimizers = self.kmers.windows(w).enumerate().map(|(i, window)| {
+        let mut minimizers = self.kmers.windows(w).enumerate().map(|(i, window)| {
             (
                 // The start position in the original string of this window
-                i * self.k,
+                i,
                 // The minimizer kmer in this window
                 window
                     .iter()
@@ -101,34 +114,56 @@ impl KmerSequence {
             )
         });
 
-        // TODO: de-duplication!
+        // De-duplication (taking the first start position and accumulating lengths)
+        let mut super_kmers: Vec<SuperKmer> = Vec::new();
+        let (mut curr_start_i, mut curr_minimizer) = minimizers.next().unwrap();
+        let mut curr_count = 1;
+        for (i, minimizer) in minimizers {
+            if self.compare_kmers(minimizer, curr_minimizer) == Ordering::Equal {
+                // deduplicate current minimizer
+                curr_count += 1;
+            } else {
+                // Add the "previous" minimizer, de-duplicated
+                super_kmers.push(SuperKmer {
+                    start_pos: curr_start_i,
+                    length: curr_count + self.k - 1,
+                    minimizer: curr_minimizer.clone(),
+                });
 
-        todo!()
+                // reset the current element
+                (curr_start_i, curr_minimizer) = (i, minimizer);
+                curr_count = 1;
+            }
+        }
+        // Special case: add the last element
+        super_kmers.push(SuperKmer {
+            start_pos: curr_start_i,
+            length: curr_count + self.k - 1,
+            minimizer: curr_minimizer.clone(),
+        });
+
+        super_kmers
     }
 }
 
-impl fmt::Debug for KmerSequence {
-    // uhh dont worry about this too much
+impl fmt::Debug for Kmer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Kmer::Data(d) => write!(f, "Kmer [{}]", d.iter().format(", ")),
+            Kmer::Sentinel => write!(f, "Kmer $"),
+        }
+    }
+}
+
+impl fmt::Debug for Alphabet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "KmerSequence {{ alphabet = {}, kmers = [\n{}\n] }}",
-            self.alphabet
+            "Alphabet [{}]",
+            self.0
                 .iter()
-                .map(|(&from, &to)| format!("{} -> {}", to, from as char))
-                .format(", "),
-            self.kmers
-                .iter()
-                .map(|kmer| match kmer {
-                    Kmer::Sentinel => format!("Kmer $"),
-                    Kmer::Data(d) => format!(
-                        "Kmer [{}]",
-                        d.iter()
-                            .map(|b| { self.alphabet.get_by_right(&b).unwrap().clone() as char })
-                            .format(", ")
-                    ),
-                })
-                .format(",\n")
+                .map(|(&from, &to)| format!("{} <> {}", from as char, to))
+                .format(", ")
         )
     }
 }

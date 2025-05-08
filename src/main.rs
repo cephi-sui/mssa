@@ -25,10 +25,19 @@ fn main() -> Result<()> {
             fasta_file,
             output_file,
         } => {
-            let sequences = read_sequences(fasta_file)?;
-            let k = 16;
-            let kmers = KmerSequence::from_bytes(&sequences[0].representation, k);
-            println!("kmers: {:?}", kmers)
+            // let sequences = read_sequences(fasta_file)?;
+            // let k = 16;
+            // let kmers = KmerSequence::from_bytes(&sequences[0].representation, k);
+            // println!("kmers: {:?}", kmers);
+            // let result = kmers.compute_super_kmers(3);
+
+            let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
+            let k = 3;
+            let w = 3;
+            let kmers = KmerSequence::from_bytes(sequence, k);
+            println!("kmers: {:#?}", kmers);
+            let super_kmers = kmers.compute_super_kmers(w);
+            println!("super_kmers: {:#?}", super_kmers);
         }
     }
 
