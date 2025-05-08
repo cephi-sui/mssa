@@ -1,15 +1,14 @@
+mod fasta;
+mod int_vec;
+mod transform;
+
 use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
 
-mod fasta;
 use fasta::read_sequences;
-use kmer::{construct_super_kmers, to_kmers};
-
-mod kmer;
-
-mod sa;
+use transform::KmerSequence;
 
 #[derive(Parser)]
 enum Args {
@@ -27,10 +26,9 @@ fn main() -> Result<()> {
             output_file,
         } => {
             let sequences = read_sequences(fasta_file)?;
-            println!("{:?}", sequences[0].representation.len());
-            let kmers = to_kmers(&sequences[0].representation, 10);
-            let s_kmers = construct_super_kmers(&kmers, 10);
-            println!("{:?}", s_kmers);
+            let k = 16;
+            let kmers = KmerSequence::from_bytes(&sequences[0].representation, k);
+            println!("kmers: {:?}", kmers)
         }
     }
 

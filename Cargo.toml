@@ -5,4 +5,9 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.98"
+bimap = "0.6.3"
+bitvec = { version = "1.0.1", features = ["serde"] }
 clap = { version = "4.5.37", features = ["derive"] }
+funty = "2.0.0"
+itertools = "0.14.0"
+serde = { version = "1.0.219", features = ["derive"] }

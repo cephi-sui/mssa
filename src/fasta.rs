@@ -13,7 +13,7 @@ pub fn read_sequences<P: AsRef<Path>>(path: P) -> Result<Vec<Sequence>> {
         .split('>')
         .skip(1) // First split is an empty string.
         .filter_map(|sequence| {
-            let mut split = sequence.split('\n');
+            let mut split = sequence.lines();
             Some(Sequence {
                 description: split.next()?.to_string(),
                 representation: split.collect::<String>().into_bytes(),
