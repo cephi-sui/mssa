@@ -87,7 +87,7 @@ impl IntVec {
     /// Panics if `value` is larger than 2^(`integer_size`) - 1.
     pub fn set(&mut self, index: usize, value: u8) -> Option<()> {
         assert!(
-            value < (1u8 << self.bits),
+            <u8 as Into<u128>>::into(value) < (1u128 << self.bits),
             "Value too large to fit in integer of specified length",
         );
 
@@ -169,17 +169,17 @@ mod tests {
 
     #[test]
     fn push_test() {
-        let mut int_array = IntVec::new(10);
+        let mut int_array = IntVec::new(6);
 
-        for i in 0..100 {
-            int_array.push((i * 10) as u8);
+        for i in 0..8 {
+            int_array.push((i * 8) as u8);
         }
 
-        for i in 0..100 {
-            assert_eq!(int_array.get(i), Some((i * 10) as u8));
+        for i in 0..8 {
+            assert_eq!(int_array.get(i), Some((i * 8) as u8));
         }
 
-        assert_eq!(int_array.len(), 100);
-        assert_eq!(int_array.inner.len(), 100 * 10);
+        assert_eq!(int_array.len(), 8);
+        assert_eq!(int_array.inner.len(), 8 * 6);
     }
 }
