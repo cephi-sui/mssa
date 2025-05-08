@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt};
+use std::{cmp::Ordering, collections::HashSet, fmt};
 
 use bimap::BiMap;
 use itertools::Itertools;
@@ -11,8 +11,21 @@ enum Kmer {
     Sentinel,
 }
 
+pub struct SuperKmer {
+    // The starting position of the super-kmer in the underlying string
+    start_pos: usize,
+
+    // The length of the super-kmer in the underlying string
+    length: usize,
+
+    // The minimizer kmer
+    minimizer: Kmer,
+}
+
 pub struct KmerSequence {
     kmers: Vec<Kmer>,
+
+    k: usize,
 
     /// A mapping from u8s in the original string to
     /// u8s that have been compressed into a smaller domain
@@ -52,7 +65,45 @@ impl KmerSequence {
         // Make sure we always have a sentinel kmer
         kmers.push(Kmer::Sentinel);
 
-        Self { kmers, alphabet }
+        Self { kmers, k, alphabet }
+    }
+
+    // Panics if the kmer isn't a part of this KmerSequence
+    fn compare_kmers(&self, left: &Kmer, right: &Kmer) -> Ordering {
+        match (left, right) {
+            (Kmer::Sentinel, Kmer::Sentinel) => Ordering::Equal,
+            (Kmer::Sentinel, _) => Ordering::Greater,
+            (_, Kmer::Sentinel) => Ordering::Less,
+            (Kmer::Data(vec1), Kmer::Data(vec2)) => {
+                // Do the comparison in the original string alphabet for now
+                let left = vec1.iter().map(|b| self.alphabet.get_by_right(&b).unwrap());
+                let right = vec2.iter().map(|b| self.alphabet.get_by_right(&b).unwrap());
+
+                left.cmp(right)
+            }
+        }
+    }
+
+    pub fn compute_super_kmers(&self, w: usize) -> Vec<SuperKmer> {
+        assert!(self.kmers.len() >= w);
+        assert!(w >= 1);
+
+        // Find the minimizers for each k-mer window
+        let minimizers = self.kmers.windows(w).enumerate().map(|(i, window)| {
+            (
+                // The start position in the original string of this window
+                i * self.k,
+                // The minimizer kmer in this window
+                window
+                    .iter()
+                    .min_by(|&kmer1, &kmer2| self.compare_kmers(kmer1, kmer2))
+                    .unwrap(),
+            )
+        });
+
+        // TODO: de-duplication!
+
+        todo!()
     }
 }
 
@@ -73,12 +124,7 @@ impl fmt::Debug for KmerSequence {
                     Kmer::Data(d) => format!(
                         "Kmer [{}]",
                         d.iter()
-                            .map(|b| {
-                                self.alphabet
-                                    .get_by_right(&b.try_into().unwrap())
-                                    .unwrap()
-                                    .clone() as char
-                            })
+                            .map(|b| { self.alphabet.get_by_right(&b).unwrap().clone() as char })
                             .format(", ")
                     ),
                 })

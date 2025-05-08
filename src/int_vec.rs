@@ -17,9 +17,9 @@ pub struct IntVecIterator<'a> {
 }
 
 impl<'a> Iterator for IntVecIterator<'a> {
-    type Item = u128;
+    type Item = u8;
 
-    fn next(&mut self) -> Option<u128> {
+    fn next(&mut self) -> Option<u8> {
         let result = self.intvec.get(self.index)?;
         self.index += 1;
         Some(result)
@@ -28,11 +28,11 @@ impl<'a> Iterator for IntVecIterator<'a> {
 
 impl IntVec {
     /// Create a new IntVec of integers of a generic length `bits` bits.
-    /// Panics if `bits` is not between 1 and 128.
+    /// Panics if `bits` is not between 1 and 8.
     pub fn new(bits: usize) -> Self {
         assert!(
-            bits >= 1 && bits <= 128,
-            "IntArray: N must be between 1 and 128"
+            bits >= 1 && bits <= 8,
+            "IntArray: N must be between 1 and 8"
         );
 
         let inner = bitvec![usize, Lsb0; 0; 0];
@@ -41,12 +41,12 @@ impl IntVec {
     }
 
     /// Create a new IntVec of `len` integers of a generic length `bits` bits.
-    /// Panics if `bits` is not between 1 and 128, or if an arithmetic
+    /// Panics if `bits` is not between 1 and 8, or if an arithmetic
     /// overflow occurs.
     pub fn new_zeros(bits: usize, len: usize) -> Self {
         assert!(
-            bits >= 1 && bits <= 128,
-            "IntArray: N must be between 1 and 128"
+            bits >= 1 && bits <= 8,
+            "IntArray: N must be between 1 and 8"
         );
 
         let bit_count = len.checked_mul(bits).expect("IntArray size too large");
@@ -55,11 +55,10 @@ impl IntVec {
         Self { inner, bits }
     }
 
-    pub fn from_iter<T: Unsigned, V: IntoIterator<Item = T>>(bits: usize, iter: V) -> Self {
+    pub fn from_iter<V: IntoIterator<Item = u8>>(bits: usize, iter: V) -> Self {
         let mut ret = Self::new(bits);
 
         for x in iter {
-            let x: u128 = x.as_u128();
             ret.push(x);
         }
 
@@ -78,7 +77,7 @@ impl IntVec {
         self.len() == 0
     }
 
-    pub fn get(&self, index: usize) -> Option<u128> {
+    pub fn get(&self, index: usize) -> Option<u8> {
         let start = index * self.bits;
         let range = start..(start + self.bits);
 
@@ -86,9 +85,9 @@ impl IntVec {
     }
 
     /// Panics if `value` is larger than 2^(`integer_size`) - 1.
-    pub fn set(&mut self, index: usize, value: u128) -> Option<()> {
+    pub fn set(&mut self, index: usize, value: u8) -> Option<()> {
         assert!(
-            value < (1u128 << self.bits),
+            value < (1u8 << self.bits),
             "Value too large to fit in integer of specified length",
         );
 
@@ -101,9 +100,9 @@ impl IntVec {
     }
 
     /// Panics if `value` is larger than 2^(`integer_size`) - 1.
-    pub fn push(&mut self, value: u128) {
+    pub fn push(&mut self, value: u8) {
         assert!(
-            value < (1u128 << self.bits),
+            value < (1u8 << self.bits),
             "Value too large to fit in integer of specified length",
         );
 
@@ -121,7 +120,7 @@ impl IntVec {
 }
 
 impl<'a> IntoIterator for &'a IntVec {
-    type Item = u128;
+    type Item = u8;
     type IntoIter = IntVecIterator<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -131,6 +130,14 @@ impl<'a> IntoIterator for &'a IntVec {
         }
     }
 }
+
+impl PartialEq for IntVec {
+    fn eq(&self, other: &Self) -> bool {
+        self.iter().eq(other.iter())
+    }
+}
+
+impl Eq for IntVec {}
 
 impl fmt::Debug for IntVec {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -152,11 +159,11 @@ mod tests {
         let mut int_array = IntVec::new_zeros(8, 4);
 
         for i in 0..int_array.len() {
-            int_array.set(i, (i * 10) as u128);
+            int_array.set(i, (i * 10) as u8);
         }
 
         for i in 0..int_array.len() {
-            assert_eq!(int_array.get(i), Some((i * 10) as u128));
+            assert_eq!(int_array.get(i), Some((i * 10) as u8));
         }
     }
 
@@ -165,11 +172,11 @@ mod tests {
         let mut int_array = IntVec::new(10);
 
         for i in 0..100 {
-            int_array.push((i * 10) as u128);
+            int_array.push((i * 10) as u8);
         }
 
         for i in 0..100 {
-            assert_eq!(int_array.get(i), Some((i * 10) as u128));
+            assert_eq!(int_array.get(i), Some((i * 10) as u8));
         }
 
         assert_eq!(int_array.len(), 100);
