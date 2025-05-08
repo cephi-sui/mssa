@@ -7,7 +7,6 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 
-use fasta::read_sequences;
 use transform::KmerSequence;
 
 #[derive(Parser)]

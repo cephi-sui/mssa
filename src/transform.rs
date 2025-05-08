@@ -1,10 +1,6 @@
-use std::{
-    cmp::Ordering,
-    collections::{BTreeSet, HashSet},
-    fmt, iter,
-};
+use std::{cmp::Ordering, collections::BTreeSet, fmt};
 
-use bimap::{BiBTreeMap, BiMap};
+use bimap::BiMap;
 use itertools::Itertools;
 
 use crate::int_vec::IntVec;
