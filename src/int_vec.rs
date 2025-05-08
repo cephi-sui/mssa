@@ -102,7 +102,7 @@ impl IntVec {
     /// Panics if `value` is larger than 2^(`integer_size`) - 1.
     pub fn push(&mut self, value: u8) {
         assert!(
-            value < (1u8 << self.bits),
+            <u8 as Into<u128>>::into(value) < (1u128 << self.bits),
             "Value too large to fit in integer of specified length",
         );
 
