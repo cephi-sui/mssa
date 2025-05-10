@@ -30,6 +30,8 @@ pub struct SuperKmer {
 
 // TODO: should SuperKmerSequence be a separate type? That way we
 // could more cleanly keep track of `w`.
+// At the moment w should be passed to the SuffixArray::from_kmers() function,
+// which computes the SuperKmers for you.
 
 #[derive(Debug)]
 pub struct KmerSequence {

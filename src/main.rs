@@ -1,5 +1,6 @@
 mod fasta;
 mod int_vec;
+mod suffix_array;
 mod transform;
 
 use std::path::PathBuf;
