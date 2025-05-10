@@ -11,7 +11,7 @@ struct Alphabet(BiMap<u8, u8>);
 
 /// Represents a single k-mer.
 #[derive(Clone)]
-enum Kmer {
+pub enum Kmer {
     Data(IntVec),
     Sentinel,
 }
@@ -19,13 +19,13 @@ enum Kmer {
 #[derive(Debug)]
 pub struct SuperKmer {
     // The starting position of the super-kmer in the underlying string
-    start_pos: usize,
+    pub start_pos: usize,
 
     // The length of the super-kmer in the underlying string
-    length: usize,
+    pub length: usize,
 
     // The minimizer kmer
-    minimizer: Kmer,
+    pub minimizer: Kmer,
 }
 
 // TODO: should SuperKmerSequence be a separate type? That way we
@@ -85,7 +85,7 @@ impl KmerSequence {
     }
 
     // Panics if the kmer isn't a part of this KmerSequence
-    fn compare_kmers(&self, left: &Kmer, right: &Kmer) -> Ordering {
+    pub fn compare_kmers(&self, left: &Kmer, right: &Kmer) -> Ordering {
         match (left, right) {
             (Kmer::Sentinel, Kmer::Sentinel) => Ordering::Equal,
             (Kmer::Sentinel, _) => Ordering::Greater,

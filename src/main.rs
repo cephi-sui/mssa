@@ -1,5 +1,6 @@
 mod fasta;
 mod int_vec;
+mod iter_order_by;
 mod suffix_array;
 mod transform;
 
