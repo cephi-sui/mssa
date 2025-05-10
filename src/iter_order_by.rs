@@ -6,7 +6,6 @@
 
 use std::{cmp::Ordering, ops::ControlFlow};
 
-
 #[inline]
 fn iter_compare<A, B, F, T>(mut a: A, mut b: B, f: F) -> ControlFlow<T, Ordering>
 where

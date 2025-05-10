@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 
+use suffix_array::{StandardQuery, SuffixArray};
 use transform::KmerSequence;
 
 #[derive(Parser)]
@@ -37,8 +38,11 @@ fn main() -> Result<()> {
             let w = 3;
             let kmers = KmerSequence::from_bytes(sequence, k);
             println!("kmers: {:#?}", kmers);
-            let super_kmers = kmers.compute_super_kmers(w);
-            println!("super_kmers: {:#?}", super_kmers);
+
+            println!("----------");
+            let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w);
+            let x = suffix_array.query("hi".as_bytes());
+            println!("{:#?}", suffix_array);
         }
     }
 

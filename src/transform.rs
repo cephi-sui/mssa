@@ -142,6 +142,10 @@ impl KmerSequence {
 
         super_kmers
     }
+
+    pub fn k(&self) -> usize {
+        self.k
+    }
 }
 
 impl fmt::Debug for Kmer {
