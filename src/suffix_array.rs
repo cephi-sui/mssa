@@ -1,3 +1,5 @@
+use std::cmp::{self, Ordering};
+
 use bloom::BloomFilter;
 
 use crate::iter_order_by::MyIterOrderBy;
@@ -20,7 +22,9 @@ use crate::transform::{KmerSequence, SuperKmer};
 #[derive(Debug)]
 pub struct SuffixArray<T> {
     underlying_kmers: KmerSequence,
+    w: usize,
 
+    // NOTE: we avoid storing a Vec<&[SuperKmer]> to make serialization easier
     super_kmers: Vec<SuperKmer>,
     suffix_array: Vec<usize>,
 
@@ -52,6 +56,15 @@ fn build_suffix_array(kmers: &KmerSequence, w: usize) -> (Vec<SuperKmer>, Vec<us
 
 impl<T> SuffixArray<T> {
     // put any methods that don't need to touch query_mode_aux_data here
+
+    pub fn get_suffix_array(&self) -> Vec<&[SuperKmer]> {
+        let n = self.super_kmers.len();
+
+        self.suffix_array
+            .iter()
+            .map(|&i| &self.super_kmers[i..n])
+            .collect()
+    }
 }
 
 #[derive(Debug)]
@@ -69,6 +82,7 @@ impl SuffixArray<StandardQuery> {
 
         Self {
             underlying_kmers: kmers,
+            w,
             super_kmers,
             suffix_array,
             query_mode_aux_data: StandardQuery {},
@@ -76,9 +90,67 @@ impl SuffixArray<StandardQuery> {
     }
 
     pub fn query(&self, query: &[u8]) -> Option<usize> {
-        let query_kmers = KmerSequence::from_bytes(query, self.underlying_kmers.k());
+        let suffix_array = self.get_suffix_array();
 
-        todo!()
+        let query_kmers = KmerSequence::from_bytes(query, self.underlying_kmers.k());
+        let query_super_kmers = query_kmers.compute_super_kmers(self.w);
+        println!("QUERY_SUPER_KMERS: {:#?}", query_super_kmers);
+
+        let cmp_slice_to_query = |slice: &[SuperKmer]| {
+            let l = cmp::min(slice.len(), query_super_kmers.len());
+            slice.iter().take(l).my_cmp_by(
+                query_super_kmers.iter().take(l),
+                |SuperKmer {
+                     minimizer: minimizer1,
+                     ..
+                 },
+                 SuperKmer {
+                     minimizer: minimizer2,
+                     ..
+                 }| self.underlying_kmers.compare_kmers(minimizer1, minimizer2),
+            )
+        };
+
+        // Look for first index in suffix array == kmer
+        let left_idx =
+            suffix_array.partition_point(|&slice| cmp_slice_to_query(slice) == Ordering::Less);
+        // Look for first index in suffix array > kmer
+        let right_idx =
+            suffix_array.partition_point(|&slice| cmp_slice_to_query(slice) != Ordering::Greater);
+
+        if left_idx == right_idx {
+            // Query not present
+            println!("AAAAAAAAAAAAAAAAAAAAAA: {:?}", left_idx);
+            return None;
+        }
+
+        // Query could be present anywhere in the range
+        // TODO: can this be optimized by not constructing the entire original string for every
+        // query?
+        let original_string = self.underlying_kmers.get_original_string();
+        println!("left_idx: {:?}", left_idx);
+        println!("right_idx: {:?}", right_idx);
+        for i in left_idx..right_idx {
+            let super_kmers = suffix_array[i];
+
+            let start_pos = super_kmers.first().unwrap().start_pos;
+            let end_pos =
+                super_kmers.last().unwrap().start_pos + super_kmers.last().unwrap().length - 1;
+            println!("start_pos: {:?}", start_pos);
+            println!("end_pos: {:?}", end_pos);
+
+            for (i, w) in original_string[start_pos..end_pos]
+                .windows(query.len())
+                .enumerate()
+            {
+                println!("COMPARING {:?} WITH {:?}", w, query);
+                if w == query {
+                    return Some(start_pos + i);
+                }
+            }
+        }
+
+        None
     }
 }
 
@@ -91,6 +163,7 @@ impl SuffixArray<BloomFilterQuery> {
 
         Self {
             underlying_kmers: kmers,
+            w,
             super_kmers,
             suffix_array,
             query_mode_aux_data: BloomFilterQuery { bloom_filter },

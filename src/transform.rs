@@ -44,6 +44,8 @@ pub struct KmerSequence {
 
 impl KmerSequence {
     pub fn from_bytes(sequence: &[u8], k: usize) -> Self {
+        assert!(k > 0);
+
         // Construct a mapping from u8 -> compressed u8 of the
         // bytes in the original sequence
         let mut alphabet = BiMap::new();
@@ -84,6 +86,16 @@ impl KmerSequence {
         }
     }
 
+    pub fn get_original_string(&self) -> Vec<u8> {
+        self.kmers
+            .iter()
+            .filter_map(|kmer| match kmer {
+                Kmer::Data(d) => Some(*self.alphabet.0.get_by_right(&d.get(0).unwrap()).unwrap()),
+                Kmer::Sentinel => None,
+            })
+            .collect()
+    }
+
     // Panics if the kmer isn't a part of this KmerSequence
     pub fn compare_kmers(&self, left: &Kmer, right: &Kmer) -> Ordering {
         match (left, right) {
@@ -95,22 +107,26 @@ impl KmerSequence {
     }
 
     // TODO: switch from the naive approach to something more efficient
-    pub fn compute_super_kmers(&self, w: usize) -> Vec<SuperKmer> {
+    pub fn compute_minimizer_chain(&self, w: usize) -> Vec<&Kmer> {
         assert!(self.kmers.len() >= w);
         assert!(w >= 1);
 
         // Find the minimizers for each k-mer window
-        let mut minimizers = self.kmers.windows(w).enumerate().map(|(i, window)| {
-            (
-                // The start position in the original string of this window
-                i,
+        self.kmers
+            .windows(w)
+            .map(|window| {
                 // The minimizer kmer in this window
                 window
                     .iter()
                     .min_by(|&kmer1, &kmer2| self.compare_kmers(kmer1, kmer2))
-                    .unwrap(),
-            )
-        });
+                    .unwrap()
+            })
+            .collect()
+    }
+
+    pub fn compute_super_kmers(&self, w: usize) -> Vec<SuperKmer> {
+        // Compute the minimizer chain
+        let mut minimizers = self.compute_minimizer_chain(w).into_iter().enumerate();
 
         // De-duplication (taking the first start position and accumulating lengths)
         let mut super_kmers: Vec<SuperKmer> = Vec::new();

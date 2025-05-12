@@ -41,8 +41,9 @@ fn main() -> Result<()> {
 
             println!("----------");
             let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w);
-            let x = suffix_array.query("hi".as_bytes());
             println!("{:#?}", suffix_array);
+            let query_result = suffix_array.query("CTGAC".as_bytes());
+            println!("{:#?}", query_result);
         }
     }
 
