@@ -50,10 +50,10 @@ impl QueryMode for StandardQuery {
     type InitParams = ();
 
     fn initialize_aux_data(
-        kmers: &KmerSequence,
-        w: usize,
-        suffix_array: &[&[SuperKmer]],
-        init_params: Self::InitParams,
+        _kmers: &KmerSequence,
+        _w: usize,
+        _suffix_array: &[&[SuperKmer]],
+        _init_params: Self::InitParams,
     ) -> Self {
         StandardQuery {}
     }
