@@ -40,7 +40,7 @@ fn main() -> Result<()> {
             println!("kmers: {:#?}", kmers);
 
             println!("----------");
-            let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w);
+            let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
             println!("{:#?}", suffix_array);
             let query_result = suffix_array.query("CTGAC".as_bytes());
             println!("{:#?}", query_result);

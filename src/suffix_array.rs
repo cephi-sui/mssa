@@ -17,7 +17,7 @@ use crate::transform::{KmerSequence, SuperKmer};
 /// ```
 /// let kmers = some_kmer_computation();
 /// let w = 3;
-/// let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w);
+/// let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
 /// ```
 #[derive(Debug)]
 pub struct SuffixArray<T> {
@@ -32,30 +32,86 @@ pub struct SuffixArray<T> {
     query_mode_aux_data: T,
 }
 
-// Build a suffix array. Only meant to be used internally; code should
-// create suffix arrays by calling SuffixArray::<T>::from_kmers().
-fn build_suffix_array(kmers: &KmerSequence, w: usize) -> (Vec<SuperKmer>, Vec<usize>) {
-    // Construct the suffix array
-    let super_kmers = kmers.compute_super_kmers(w);
-    let n = super_kmers.len();
+pub trait QueryMode {
+    type InitParams;
 
-    let mut suffix_array = (0..n).collect::<Vec<_>>();
-
-    // Sort the suffix array
-    suffix_array.sort_by(|&i1, &i2| {
-        let suffix1 = &super_kmers[i1..n];
-        let suffix2 = &super_kmers[i2..n];
-
-        suffix1.iter().my_cmp_by(suffix2.iter(), |x, y| {
-            kmers.compare_kmers(&x.minimizer, &y.minimizer)
-        })
-    });
-
-    (super_kmers, suffix_array)
+    fn initialize_aux_data(
+        kmers: &KmerSequence,
+        w: usize,
+        suffix_array: &[&[SuperKmer]],
+        init_params: Self::InitParams,
+    ) -> Self;
 }
 
-impl<T> SuffixArray<T> {
+#[derive(Debug)]
+pub struct StandardQuery;
+
+impl QueryMode for StandardQuery {
+    type InitParams = ();
+
+    fn initialize_aux_data(
+        kmers: &KmerSequence,
+        w: usize,
+        suffix_array: &[&[SuperKmer]],
+        init_params: Self::InitParams,
+    ) -> Self {
+        StandardQuery {}
+    }
+}
+
+// NOTE: this is a placeholder
+pub struct BloomFilterQuery {
+    example: BloomFilter,
+}
+
+impl QueryMode for BloomFilterQuery {
+    /// False positive rate
+    type InitParams = f32;
+
+    fn initialize_aux_data(
+        kmers: &KmerSequence,
+        w: usize,
+        suffix_array: &[&[SuperKmer]],
+        init_params: Self::InitParams,
+    ) -> Self {
+        todo!()
+    }
+}
+
+impl<T: QueryMode> SuffixArray<T> {
     // put any methods that don't need to touch query_mode_aux_data here
+
+    pub fn from_kmers(kmers: KmerSequence, w: usize, init_params: T::InitParams) -> Self {
+        // Construct the suffix array
+        let super_kmers = kmers.compute_super_kmers(w);
+        let n = super_kmers.len();
+
+        let mut suffix_array = (0..n).collect::<Vec<_>>();
+
+        // Sort the suffix array
+        suffix_array.sort_by(|&i1, &i2| {
+            let suffix1 = &super_kmers[i1..n];
+            let suffix2 = &super_kmers[i2..n];
+
+            suffix1.iter().my_cmp_by(suffix2.iter(), |x, y| {
+                kmers.compare_kmers(&x.minimizer, &y.minimizer)
+            })
+        });
+
+        let suffix_array_slices: Vec<_> =
+            suffix_array.iter().map(|&i| &super_kmers[i..n]).collect();
+
+        let query_mode_aux_data =
+            T::initialize_aux_data(&kmers, w, &suffix_array_slices, init_params);
+
+        Self {
+            underlying_kmers: kmers,
+            w,
+            super_kmers,
+            suffix_array,
+            query_mode_aux_data,
+        }
+    }
 
     pub fn get_suffix_array(&self) -> Vec<&[SuperKmer]> {
         let n = self.super_kmers.len();
@@ -67,28 +123,8 @@ impl<T> SuffixArray<T> {
     }
 }
 
-#[derive(Debug)]
-pub struct StandardQuery;
-
-// TODO: this is a placeholder
-pub struct BloomFilterQuery {
-    bloom_filter: BloomFilter,
-}
-
 // The standard query mode, with no accelerant data structures
 impl SuffixArray<StandardQuery> {
-    pub fn from_kmers(kmers: KmerSequence, w: usize) -> Self {
-        let (super_kmers, suffix_array) = build_suffix_array(&kmers, w);
-
-        Self {
-            underlying_kmers: kmers,
-            w,
-            super_kmers,
-            suffix_array,
-            query_mode_aux_data: StandardQuery {},
-        }
-    }
-
     pub fn query(&self, query: &[u8]) -> Option<usize> {
         let suffix_array = self.get_suffix_array();
 
@@ -151,22 +187,5 @@ impl SuffixArray<StandardQuery> {
         }
 
         None
-    }
-}
-
-impl SuffixArray<BloomFilterQuery> {
-    pub fn from_kmers(kmers: KmerSequence, w: usize) -> Self {
-        let (super_kmers, suffix_array) = build_suffix_array(&kmers, w);
-
-        // TODO: construct bloom filter
-        let bloom_filter = todo!();
-
-        Self {
-            underlying_kmers: kmers,
-            w,
-            super_kmers,
-            suffix_array,
-            query_mode_aux_data: BloomFilterQuery { bloom_filter },
-        }
     }
 }
