@@ -3,6 +3,8 @@
 // with the #[unstable(...)] removed.
 //
 // Yes, I know this is horrible.
+//
+// cephi: What the hell have you created...
 
 use std::{cmp::Ordering, ops::ControlFlow};
 

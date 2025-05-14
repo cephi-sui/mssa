@@ -49,3 +49,23 @@ fn main() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn basic_test() {
+        let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
+        let k = 3;
+        let w = 3;
+        let kmers = KmerSequence::from_bytes(sequence, k);
+        println!("kmers: {:#?}", kmers);
+
+        println!("----------");
+        let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
+        println!("{:#?}", suffix_array);
+        let query_result = suffix_array.query("CTGAC".as_bytes());
+        println!("{:#?}", query_result);
+    }
+}

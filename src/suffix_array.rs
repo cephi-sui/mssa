@@ -125,12 +125,17 @@ impl<T: QueryMode> SuffixArray<T> {
 
 // The standard query mode, with no accelerant data structures
 impl SuffixArray<StandardQuery> {
+    pub fn dumbquery(&self, query: &[u8]) -> Option<usize> {
+        todo!();
+        let suffix_array = self.get_suffix_array();
+
+    }
+
     pub fn query(&self, query: &[u8]) -> Option<usize> {
         let suffix_array = self.get_suffix_array();
 
         let query_kmers = KmerSequence::from_bytes(query, self.underlying_kmers.k());
         let query_super_kmers = query_kmers.compute_super_kmers(self.w);
-        println!("QUERY_SUPER_KMERS: {:#?}", query_super_kmers);
 
         let cmp_slice_to_query = |slice: &[SuperKmer]| {
             let l = cmp::min(slice.len(), query_super_kmers.len());

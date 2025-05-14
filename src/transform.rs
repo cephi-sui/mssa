@@ -61,7 +61,9 @@ impl KmerSequence {
 
         // Compute the number of bits we need to store a single
         // underlying character
-        let bits_underlying = u8::BITS - (bytes_seen.len() as u8).leading_zeros();
+        // TODO: Make sure this spits out the correct number.
+        //let bits_underlying = u8::BITS - (bytes_seen.len() as u8).leading_zeros();
+        let bits_underlying = (bytes_seen.len() as u8 + 1).ilog2();
 
         // Construct a sequence of Kmers
         let mut kmers: Vec<_> = sequence
@@ -77,7 +79,8 @@ impl KmerSequence {
             .collect();
 
         // Make sure we always have a sentinel kmer
-        kmers.push(Kmer::Sentinel);
+        // No more! Moving to queries only
+        //kmers.push(Kmer::Sentinel);
 
         Self {
             kmers,
@@ -87,13 +90,23 @@ impl KmerSequence {
     }
 
     pub fn get_original_string(&self) -> Vec<u8> {
-        self.kmers
+        // Collects the first character in every kmer.
+        let mut result: Vec<_> = self.kmers
             .iter()
             .filter_map(|kmer| match kmer {
                 Kmer::Data(d) => Some(*self.alphabet.0.get_by_right(&d.get(0).unwrap()).unwrap()),
                 Kmer::Sentinel => None,
             })
-            .collect()
+            .collect();
+
+        // Pushes the last k - 1 characters in the last kmer.
+        if let Some(Kmer::Data(d)) = self.kmers.iter().last() {
+            for transformed_c in d.iter().skip(1) {
+                result.push(*self.alphabet.0.get_by_right(&transformed_c).unwrap());
+            }
+        }
+
+        result
     }
 
     // Panics if the kmer isn't a part of this KmerSequence
@@ -140,7 +153,7 @@ impl KmerSequence {
                 // Add the "previous" minimizer, de-duplicated
                 super_kmers.push(SuperKmer {
                     start_pos: curr_start_i,
-                    length: curr_count + self.k - 1,
+                    length: curr_count + (w + self.k - 1) - 1,
                     minimizer: curr_minimizer.clone(),
                 });
 
@@ -152,7 +165,7 @@ impl KmerSequence {
         // Special case: add the last element
         super_kmers.push(SuperKmer {
             start_pos: curr_start_i,
-            length: curr_count + self.k - 1,
+            length: curr_count + (w + self.k - 1) - 1,
             minimizer: curr_minimizer.clone(),
         });
 
@@ -183,5 +196,33 @@ impl fmt::Debug for Alphabet {
                 .map(|(&from, &to)| format!("{} <> {}", from as char, to))
                 .format(", ")
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Doesn't actually do anything but print lol
+    // #[test]
+    fn test_from_bytes() {
+        let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
+        let k = 3;
+        let w = 3;
+        let kmers = KmerSequence::from_bytes(sequence, k);
+
+        dbg!(std::str::from_utf8(sequence));
+        dbg!(kmers);
+    }
+
+    #[test]
+    fn test_compute_minimizer_chain() {
+        let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
+        let k = 3;
+        let w = 3;
+        let kmers = KmerSequence::from_bytes(sequence, k);
+        let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
+        
+        let expected_superkmers = Vec::new();
     }
 }
