@@ -202,8 +202,6 @@ impl SuffixArray<StandardQuery> {
         }
 
         // Query could be present anywhere in the range
-        // TODO: can this be optimized by not constructing the entire original string for every
-        // query?
         let original_string = self.underlying_kmers.get_original_string();
         for i in left_idx..right_idx {
             let super_kmers = &suffix_array[i][0..query_super_kmers.len()];
