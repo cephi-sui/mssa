@@ -161,6 +161,9 @@ impl SuffixArray<GroundTruthQuery> {
 // The standard query mode, with no accelerant data structures
 impl SuffixArray<StandardQuery> {
     pub fn query(&self, query: &[u8]) -> Option<usize> {
+        assert!(query.len() >= self.w + self.underlying_kmers.k() - 1,
+            "query length was shorter than minimum length required by w + k - 1");
+
         let suffix_array = self.get_suffix_array();
 
         let query_kmers = KmerSequence::from_bytes(
@@ -253,20 +256,53 @@ mod test {
     #[test]
     fn standardquery_success() {
         let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
+        for k in 2..sequence.len() {
+            for w in 2..sequence.len() - k + 1 {
+                let alphabet = Alphabet::from_bytes(sequence);
+                let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
+                let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
+                println!("{:#?}", suffix_array);
+
+                for query_len in (k + w - 1)..sequence.len() {
+                    for (i, window) in sequence.windows(query_len).enumerate() {
+                        dbg!(std::str::from_utf8(&window).unwrap());
+                        assert_eq!(suffix_array.query(window), Some(i));
+                    }
+                }
+            }
+        }
+    }
+    
+    #[test]
+    fn standardquery_nomatch() {
+        let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
         let k = 3;
         let w = 3;
         let alphabet = Alphabet::from_bytes(sequence);
         let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
         let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
-        println!("{:#?}", suffix_array);
-        //let query_result = suffix_array.query("CTGAC".as_bytes());
-        //let query_result = suffix_array.query("ACCCG".as_bytes());
-        //println!("{:#?}", query_result);
 
         for query_len in 5..sequence.len() {
             for (i, window) in sequence.windows(query_len).enumerate() {
-                dbg!(std::str::from_utf8(&window).unwrap());
-                assert_eq!(suffix_array.query(window), Some(i));
+                let mut window = window.to_owned();
+                window[0] = if window[0] != b'A' { b'A' } else { b'C' };
+                assert_eq!(suffix_array.query(&window), None);
+            }
+        }
+
+        for query_len in 5..sequence.len() {
+            for (i, window) in sequence.windows(query_len).enumerate() {
+                let mut window = window.to_owned();
+                window[query_len - 1] = if window[query_len - 1] != b'A' { b'A' } else { b'C' };
+                assert_eq!(suffix_array.query(&window), None);
+            }
+        }
+
+        for query_len in 5..sequence.len() {
+            for (i, window) in sequence.windows(query_len).enumerate() {
+                let mut window = window.to_owned();
+                window[1] = if window[1] != b'A' { b'A' } else { b'C' };
+                assert_eq!(suffix_array.query(&window), None);
             }
         }
     }

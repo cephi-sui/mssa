@@ -75,7 +75,7 @@ impl Alphabet {
 
 impl KmerSequence {
     pub fn from_bytes(sequence: &[u8], k: usize, alphabet: Alphabet) -> Self {
-        assert!(k > 0);
+        assert!(k > 0 && k <= sequence.len());
 
         // Compute the number of bits we need to store a single underlying character
         let bits_underlying = (alphabet.len() as u8 + 1).ilog2();
