@@ -57,7 +57,7 @@ impl Alphabet {
         let mut bytes_seen: Vec<_> = Vec::from_iter(bytes_seen.iter().cloned());
         // TODO: This sort should be based on the ordering!
         bytes_seen.sort();
-        
+
         for (i, b) in bytes_seen.iter().cloned().enumerate() {
             // i should obviously be up to 255 since bytes_seen is a set of unique u8's
             let i: u8 = i.try_into().unwrap();

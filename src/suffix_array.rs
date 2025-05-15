@@ -148,13 +148,13 @@ impl<T: QueryMode> SuffixArray<T> {
 // The ground truth query mode which performs an extremely inefficient query for testing purposes.
 impl SuffixArray<GroundTruthQuery> {
     pub fn query(&self, query: &[u8]) -> Option<usize> {
-       let ref_str = self.underlying_kmers.get_original_string();
-       for (i, window) in ref_str.windows(query.len()).enumerate() {
-           if query == window {
-               return Some(i)
-           }
-       }
-       None
+        let ref_str = self.underlying_kmers.get_original_string();
+        for (i, window) in ref_str.windows(query.len()).enumerate() {
+            if query == window {
+                return Some(i);
+            }
+        }
+        None
     }
 }
 
@@ -202,8 +202,7 @@ impl SuffixArray<StandardQuery> {
         // TODO: can this be optimized by not constructing the entire original string for every
         // query?
         let original_string = self.underlying_kmers.get_original_string();
-        for i in left_idx..right_idx {
-        }
+        for i in left_idx..right_idx {}
         for i in left_idx..right_idx {
             let super_kmers = suffix_array[i];
 
@@ -227,7 +226,7 @@ impl SuffixArray<StandardQuery> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{fasta::read_sequences, Alphabet};
+    use crate::{Alphabet, fasta::read_sequences};
 
     #[test]
     fn groundtruthquery_success() {
@@ -243,7 +242,10 @@ mod test {
 
         for query_len in 5..sequence.len() {
             for (i, window) in sequence.windows(query_len).enumerate() {
-                assert_eq!(std_suffix_array.query(window), gt_suffix_array.query(window));
+                assert_eq!(
+                    std_suffix_array.query(window),
+                    gt_suffix_array.query(window)
+                );
             }
         }
     }
@@ -271,11 +273,15 @@ mod test {
 
     #[test]
     fn assignment1_test_data() {
-        let genome_file = read_sequences("test_input/a1-tests/test_input/salmonella_sub.fa").unwrap();
+        let genome_file =
+            read_sequences("test_input/a1-tests/test_input/salmonella_sub.fa").unwrap();
         let query_file = read_sequences("test_input/a1-tests/test_input/reads_sal_sub.fq").unwrap();
 
         let sequence = genome_file.get(0).unwrap().representation.as_slice();
-        let queries: Vec<&[u8]> = query_file.iter().map(|q| q.representation.as_slice()).collect();
+        let queries: Vec<&[u8]> = query_file
+            .iter()
+            .map(|q| q.representation.as_slice())
+            .collect();
 
         let k = 3;
         let w = 3;
@@ -295,7 +301,7 @@ mod test {
                     let slice = &sequence[i..(i + query.len())];
                     assert_eq!(slice, query);
                 }
-                None => assert!(suffix_array_ground_truth.query(query).is_none())
+                None => assert!(suffix_array_ground_truth.query(query).is_none()),
             }
 
             // The below doesn't work because StandardQuery and GroundTruthQuery might return
