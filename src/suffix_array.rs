@@ -206,10 +206,12 @@ impl SuffixArray<StandardQuery> {
         // query?
         let original_string = self.underlying_kmers.get_original_string();
         for i in left_idx..right_idx {
-            let super_kmers = suffix_array[i];
+            let super_kmers = &suffix_array[i][0..query_super_kmers.len()];
 
-            let start_pos = super_kmers.first().unwrap().start_pos;
-            let end_pos = super_kmers.last().unwrap().start_pos;
+            let first_super_kmer = super_kmers.first().unwrap();
+            let last_super_kmer = super_kmers.last().unwrap();
+            let start_pos = first_super_kmer.start_pos;
+            let end_pos = last_super_kmer.start_pos + last_super_kmer.length;
 
             for (i, w) in original_string[start_pos..end_pos]
                 .windows(query.len())
