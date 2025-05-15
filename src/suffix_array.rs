@@ -195,7 +195,6 @@ impl SuffixArray<StandardQuery> {
 
         if left_idx == right_idx {
             // Query not present
-            println!("AAAAAAAAAAAAAAAAAAAAAA: {:?}", left_idx);
             return None;
         }
 
@@ -203,8 +202,6 @@ impl SuffixArray<StandardQuery> {
         // TODO: can this be optimized by not constructing the entire original string for every
         // query?
         let original_string = self.underlying_kmers.get_original_string();
-        println!("left_idx: {:?}", left_idx);
-        println!("right_idx: {:?}", right_idx);
         for i in left_idx..right_idx {
         }
         for i in left_idx..right_idx {
@@ -212,18 +209,11 @@ impl SuffixArray<StandardQuery> {
 
             let start_pos = super_kmers.first().unwrap().start_pos;
             let end_pos = super_kmers.last().unwrap().start_pos;
-            println!("start_pos: {:?}", start_pos);
-            println!("end_pos: {:?}", end_pos);
 
             for (i, w) in original_string[start_pos..end_pos]
                 .windows(query.len())
                 .enumerate()
             {
-                println!(
-                    "COMPARING {:?} WITH {:?}",
-                    std::str::from_utf8(&w).unwrap(),
-                    std::str::from_utf8(&query).unwrap()
-                );
                 if w == query {
                     return Some(start_pos + i);
                 }
@@ -237,7 +227,7 @@ impl SuffixArray<StandardQuery> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::Alphabet;
+    use crate::{fasta::read_sequences, Alphabet};
 
     #[test]
     fn groundtruthquery_success() {
@@ -276,6 +266,41 @@ mod test {
                 dbg!(std::str::from_utf8(&window).unwrap());
                 assert_eq!(suffix_array.query(window), Some(i));
             }
+        }
+    }
+
+    #[test]
+    fn assignment1_test_data() {
+        let genome_file = read_sequences("test_input/a1-tests/test_input/salmonella_sub.fa").unwrap();
+        let query_file = read_sequences("test_input/a1-tests/test_input/reads_sal_sub.fq").unwrap();
+
+        let sequence = genome_file.get(0).unwrap().representation.as_slice();
+        let queries: Vec<&[u8]> = query_file.iter().map(|q| q.representation.as_slice()).collect();
+
+        let k = 3;
+        let w = 3;
+        let alphabet = Alphabet::from_bytes(sequence);
+        let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
+        let suffix_array_standard = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
+
+        let alphabet = Alphabet::from_bytes(sequence);
+        let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
+        let suffix_array_ground_truth = SuffixArray::<GroundTruthQuery>::from_kmers(kmers, w, ());
+
+        for query in queries {
+            let result = suffix_array_standard.query(query);
+            match result {
+                Some(i) => {
+                    // ensure that the string is actually present
+                    let slice = &sequence[i..(i + query.len())];
+                    assert_eq!(slice, query);
+                }
+                None => assert!(suffix_array_ground_truth.query(query).is_none())
+            }
+
+            // The below doesn't work because StandardQuery and GroundTruthQuery might return
+            // different occurences of the same query in the genome. Duh!
+            // assert_eq!(suffix_array_standard.query(query), suffix_array_ground_truth.query(query));
         }
     }
 }
