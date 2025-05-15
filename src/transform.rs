@@ -11,13 +11,13 @@ use crate::int_vec::IntVec;
 pub struct Alphabet(BiMap<u8, u8>);
 
 /// Represents a single k-mer.
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Kmer {
     Data(IntVec),
     Sentinel,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct SuperKmer {
     // The starting position of the super-kmer in the underlying string
     pub start_pos: usize,
@@ -93,7 +93,12 @@ impl KmerSequence {
             })
             .collect();
 
-        Self { kmers, k, alphabet, original_string: sequence.to_owned() }
+        Self {
+            kmers,
+            k,
+            alphabet,
+            original_string: sequence.to_owned(),
+        }
     }
 
     pub fn get_original_string(&self) -> &[u8] {

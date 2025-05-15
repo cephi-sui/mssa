@@ -134,15 +134,6 @@ impl<T: QueryMode> SuffixArray<T> {
             query_mode_aux_data,
         }
     }
-
-    pub fn get_suffix_array(&self) -> Vec<&[SuperKmer]> {
-        let n = self.super_kmers.len();
-
-        self.suffix_array
-            .iter()
-            .map(|&i| &self.super_kmers[i..n])
-            .collect()
-    }
 }
 
 // The ground truth query mode which performs an extremely inefficient query for testing purposes.
@@ -161,10 +152,10 @@ impl SuffixArray<GroundTruthQuery> {
 // The standard query mode, with no accelerant data structures
 impl SuffixArray<StandardQuery> {
     pub fn query(&self, query: &[u8]) -> Option<usize> {
-        assert!(query.len() >= self.w + self.underlying_kmers.k() - 1,
-            "query length was shorter than minimum length required by w + k - 1");
-
-        let suffix_array = self.get_suffix_array();
+        assert!(
+            query.len() >= self.w + self.underlying_kmers.k() - 1,
+            "query length was shorter than minimum length required by w + k - 1"
+        );
 
         let query_kmers = KmerSequence::from_bytes(
             query,
@@ -190,11 +181,13 @@ impl SuffixArray<StandardQuery> {
         };
 
         // Look for first index in suffix array == kmer
-        let left_idx =
-            suffix_array.partition_point(|&slice| cmp_slice_to_query(slice) == Ordering::Less);
+        let left_idx = self.suffix_array.partition_point(|&s| {
+            cmp_slice_to_query(&self.super_kmers[s..self.super_kmers.len()]) == Ordering::Less
+        });
         // Look for first index in suffix array > kmer
-        let right_idx =
-            suffix_array.partition_point(|&slice| cmp_slice_to_query(slice) != Ordering::Greater);
+        let right_idx = self.suffix_array.partition_point(|&s| {
+            cmp_slice_to_query(&self.super_kmers[s..self.super_kmers.len()]) != Ordering::Greater
+        });
 
         if left_idx == right_idx {
             // Query not present
@@ -204,7 +197,8 @@ impl SuffixArray<StandardQuery> {
         // Query could be present anywhere in the range
         let original_string = self.underlying_kmers.get_original_string();
         for i in left_idx..right_idx {
-            let super_kmers = &suffix_array[i][0..query_super_kmers.len()];
+            let super_kmers = &self.super_kmers[self.suffix_array[i]..self.super_kmers.len()]
+                [0..query_super_kmers.len()];
 
             let first_super_kmer = super_kmers.first().unwrap();
             let last_super_kmer = super_kmers.last().unwrap();
@@ -279,7 +273,7 @@ mod test {
             }
         }
     }
-    
+
     #[test]
     fn standardquery_nomatch() {
         let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
@@ -300,7 +294,11 @@ mod test {
         for query_len in 5..sequence.len() {
             for (i, window) in sequence.windows(query_len).enumerate() {
                 let mut window = window.to_owned();
-                window[query_len - 1] = if window[query_len - 1] != b'A' { b'A' } else { b'C' };
+                window[query_len - 1] = if window[query_len - 1] != b'A' {
+                    b'A'
+                } else {
+                    b'C'
+                };
                 assert_eq!(suffix_array.query(&window), None);
             }
         }
