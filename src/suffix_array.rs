@@ -1,4 +1,4 @@
-use std::cmp::{self, Ordering};
+use std::cmp::Ordering;
 
 use bloom::BloomFilter;
 
@@ -205,7 +205,6 @@ impl SuffixArray<StandardQuery> {
         // TODO: can this be optimized by not constructing the entire original string for every
         // query?
         let original_string = self.underlying_kmers.get_original_string();
-        for i in left_idx..right_idx {}
         for i in left_idx..right_idx {
             let super_kmers = suffix_array[i];
 
@@ -256,17 +255,25 @@ mod test {
     #[test]
     fn standardquery_success() {
         let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
-        for k in 2..sequence.len() {
-            for w in 2..sequence.len() - k + 1 {
+        for k in 1..sequence.len() {
+            for w in 1..sequence.len() - k + 1 {
                 let alphabet = Alphabet::from_bytes(sequence);
                 let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
                 let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
+
+                let alphabet = Alphabet::from_bytes(sequence);
+                let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
+                let suffix_array_gt = SuffixArray::<GroundTruthQuery>::from_kmers(kmers, w, ());
+
                 println!("{:#?}", suffix_array);
 
                 for query_len in (k + w - 1)..sequence.len() {
-                    for (i, window) in sequence.windows(query_len).enumerate() {
+                    for window in sequence.windows(query_len) {
                         dbg!(std::str::from_utf8(&window).unwrap());
-                        assert_eq!(suffix_array.query(window), Some(i));
+                        match suffix_array.query(window) {
+                            Some(i) => assert_eq!(&sequence[i..(i + window.len())], window),
+                            None => assert!(suffix_array_gt.query(window).is_none()),
+                        }
                     }
                 }
             }

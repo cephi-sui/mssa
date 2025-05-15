@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::BTreeSet, collections::HashSet, fmt};
+use std::{cmp::Ordering, collections::HashSet, fmt};
 
 use bimap::BiMap;
 use itertools::Itertools;
@@ -23,22 +23,21 @@ pub struct SuperKmer {
     pub start_pos: usize,
 
     // The length of the super-kmer in the underlying string
+    #[allow(dead_code)]
     pub length: usize,
 
     // The minimizer kmer
     pub minimizer: Kmer,
 }
 
-// TODO: should SuperKmerSequence be a separate type? That way we
-// could more cleanly keep track of `w`.
-// At the moment w should be passed to the SuffixArray::from_kmers() function,
-// which computes the SuperKmers for you.
-
 #[derive(Debug)]
 pub struct KmerSequence {
     alphabet: Alphabet,
 
     kmers: Vec<Kmer>,
+
+    // TODO: can we efficiently compute this from kmers?
+    original_string: Vec<u8>,
 
     k: usize,
 }
@@ -81,7 +80,7 @@ impl KmerSequence {
         let bits_underlying = (alphabet.len() as u8 + 1).ilog2();
 
         // Construct a sequence of Kmers
-        let mut kmers: Vec<_> = sequence
+        let kmers: Vec<_> = sequence
             .windows(k)
             .map(|window| {
                 Kmer::Data(IntVec::from_iter(
@@ -94,32 +93,15 @@ impl KmerSequence {
             })
             .collect();
 
-        Self { kmers, k, alphabet }
+        Self { kmers, k, alphabet, original_string: sequence.to_owned() }
     }
 
-    pub fn get_original_string(&self) -> Vec<u8> {
-        // Collects the first character in every kmer.
-        let mut result: Vec<_> = self
-            .kmers
-            .iter()
-            .filter_map(|kmer| match kmer {
-                Kmer::Data(d) => Some(*self.alphabet.0.get_by_right(&d.get(0).unwrap()).unwrap()),
-                Kmer::Sentinel => None,
-            })
-            .collect();
-
-        // Pushes the last k - 1 characters in the last kmer.
-        if let Some(Kmer::Data(d)) = self.kmers.iter().last() {
-            for transformed_c in d.iter().skip(1) {
-                result.push(*self.alphabet.0.get_by_right(&transformed_c).unwrap());
-            }
-        }
-
-        result
+    pub fn get_original_string(&self) -> &[u8] {
+        &self.original_string
     }
 
     pub fn get_original_string_len(&self) -> usize {
-        self.get_original_string().len()
+        self.original_string.len()
     }
 
     // Panics if the kmer isn't a part of this KmerSequence
