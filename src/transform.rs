@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::BTreeSet, fmt};
+use std::{cmp::Ordering, collections::BTreeSet, collections::HashSet, fmt};
 
 use bimap::BiMap;
 use itertools::Itertools;
@@ -7,7 +7,8 @@ use crate::int_vec::IntVec;
 
 /// A mapping from u8s in the original string to
 /// u8s that have been compressed into a smaller domain
-struct Alphabet(BiMap<u8, u8>);
+#[derive(Clone)]
+pub struct Alphabet(BiMap<u8, u8>);
 
 /// Represents a single k-mer.
 #[derive(Clone)]
@@ -42,16 +43,21 @@ pub struct KmerSequence {
     k: usize,
 }
 
-impl KmerSequence {
-    pub fn from_bytes(sequence: &[u8], k: usize) -> Self {
-        assert!(k > 0);
-
+impl Alphabet {
+    pub fn from_bytes(sequence: &[u8]) -> Self {
         // Construct a mapping from u8 -> compressed u8 of the
         // bytes in the original sequence
         let mut alphabet = BiMap::new();
+
         // BTreeSet is helpful to keep ordering the same in original
         // and transformed alphabets
-        let bytes_seen: BTreeSet<u8> = BTreeSet::from_iter(sequence.iter().cloned());
+        //let bytes_seen: BTreeSet<u8> = BTreeSet::from_iter(sequence.iter().cloned());
+
+        let bytes_seen: HashSet<u8> = HashSet::from_iter(sequence.iter().cloned());
+        let mut bytes_seen: Vec<_> = Vec::from_iter(bytes_seen.iter().cloned());
+        // TODO: This sort should be based on the ordering!
+        bytes_seen.sort();
+        
         for (i, b) in bytes_seen.iter().cloned().enumerate() {
             // i should obviously be up to 255 since bytes_seen is a set of unique u8's
             let i: u8 = i.try_into().unwrap();
@@ -59,11 +65,20 @@ impl KmerSequence {
             alphabet.insert(b, i);
         }
 
-        // Compute the number of bits we need to store a single
-        // underlying character
-        // TODO: Make sure this spits out the correct number.
-        //let bits_underlying = u8::BITS - (bytes_seen.len() as u8).leading_zeros();
-        let bits_underlying = (bytes_seen.len() as u8 + 1).ilog2();
+        Self(alphabet)
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+impl KmerSequence {
+    pub fn from_bytes(sequence: &[u8], k: usize, alphabet: Alphabet) -> Self {
+        assert!(k > 0);
+
+        // Compute the number of bits we need to store a single underlying character
+        let bits_underlying = (alphabet.len() as u8 + 1).ilog2();
 
         // Construct a sequence of Kmers
         let mut kmers: Vec<_> = sequence
@@ -73,25 +88,19 @@ impl KmerSequence {
                     bits_underlying.try_into().unwrap(),
                     window
                         .iter()
-                        .map(|b| alphabet.get_by_left(b).unwrap().clone()),
+                        // TODO: Change return type to Option<Self> and remove unwrap().
+                        .map(|b| alphabet.0.get_by_left(b).unwrap().clone()),
                 ))
             })
             .collect();
 
-        // Make sure we always have a sentinel kmer
-        // No more! Moving to queries only
-        //kmers.push(Kmer::Sentinel);
-
-        Self {
-            kmers,
-            k,
-            alphabet: Alphabet(alphabet),
-        }
+        Self { kmers, k, alphabet }
     }
 
     pub fn get_original_string(&self) -> Vec<u8> {
         // Collects the first character in every kmer.
-        let mut result: Vec<_> = self.kmers
+        let mut result: Vec<_> = self
+            .kmers
             .iter()
             .filter_map(|kmer| match kmer {
                 Kmer::Data(d) => Some(*self.alphabet.0.get_by_right(&d.get(0).unwrap()).unwrap()),
@@ -107,6 +116,10 @@ impl KmerSequence {
         }
 
         result
+    }
+
+    pub fn get_original_string_len(&self) -> usize {
+        self.get_original_string().len()
     }
 
     // Panics if the kmer isn't a part of this KmerSequence
@@ -172,6 +185,10 @@ impl KmerSequence {
         super_kmers
     }
 
+    pub fn alphabet(&self) -> Alphabet {
+        self.alphabet.clone()
+    }
+
     pub fn k(&self) -> usize {
         self.k
     }
@@ -202,27 +219,4 @@ impl fmt::Debug for Alphabet {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // Doesn't actually do anything but print lol
-    // #[test]
-    fn test_from_bytes() {
-        let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
-        let k = 3;
-        let w = 3;
-        let kmers = KmerSequence::from_bytes(sequence, k);
-
-        dbg!(std::str::from_utf8(sequence));
-        dbg!(kmers);
-    }
-
-    #[test]
-    fn test_compute_minimizer_chain() {
-        let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
-        let k = 3;
-        let w = 3;
-        let kmers = KmerSequence::from_bytes(sequence, k);
-        let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
-        
-        let expected_superkmers = Vec::new();
-    }
 }

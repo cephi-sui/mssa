@@ -3,7 +3,7 @@ use std::cmp::{self, Ordering};
 use bloom::BloomFilter;
 
 use crate::iter_order_by::MyIterOrderBy;
-use crate::transform::{KmerSequence, SuperKmer};
+use crate::transform::{Kmer, KmerSequence, SuperKmer};
 
 /// A suffix array, constructed over a sequence of kmers.
 ///
@@ -43,6 +43,20 @@ pub trait QueryMode {
     ) -> Self;
 }
 
+pub struct GroundTruthQuery;
+
+impl QueryMode for GroundTruthQuery {
+    type InitParams = ();
+
+    fn initialize_aux_data(
+        _kmers: &KmerSequence,
+        _w: usize,
+        _suffix_array: &[&[SuperKmer]],
+        _init_params: Self::InitParams,
+    ) -> Self {
+        Self {}
+    }
+}
 #[derive(Debug)]
 pub struct StandardQuery;
 
@@ -55,7 +69,7 @@ impl QueryMode for StandardQuery {
         _suffix_array: &[&[SuperKmer]],
         _init_params: Self::InitParams,
     ) -> Self {
-        StandardQuery {}
+        Self {}
     }
 }
 
@@ -83,7 +97,15 @@ impl<T: QueryMode> SuffixArray<T> {
 
     pub fn from_kmers(kmers: KmerSequence, w: usize, init_params: T::InitParams) -> Self {
         // Construct the suffix array
-        let super_kmers = kmers.compute_super_kmers(w);
+        let mut super_kmers = kmers.compute_super_kmers(w);
+        // Push sentinel kmer.
+        super_kmers.push(SuperKmer {
+            start_pos: kmers.get_original_string_len(),
+            length: 0,
+            minimizer: Kmer::Sentinel,
+        });
+        let super_kmers = super_kmers; // Drop mutability.
+
         let n = super_kmers.len();
 
         let mut suffix_array = (0..n).collect::<Vec<_>>();
@@ -123,22 +145,34 @@ impl<T: QueryMode> SuffixArray<T> {
     }
 }
 
+// The ground truth query mode which performs an extremely inefficient query for testing purposes.
+impl SuffixArray<GroundTruthQuery> {
+    pub fn query(&self, query: &[u8]) -> Option<usize> {
+       let ref_str = self.underlying_kmers.get_original_string();
+       for (i, window) in ref_str.windows(query.len()).enumerate() {
+           if query == window {
+               return Some(i)
+           }
+       }
+       None
+    }
+}
+
 // The standard query mode, with no accelerant data structures
 impl SuffixArray<StandardQuery> {
-    pub fn dumbquery(&self, query: &[u8]) -> Option<usize> {
-        todo!();
-        let suffix_array = self.get_suffix_array();
-
-    }
-
     pub fn query(&self, query: &[u8]) -> Option<usize> {
         let suffix_array = self.get_suffix_array();
 
-        let query_kmers = KmerSequence::from_bytes(query, self.underlying_kmers.k());
+        let query_kmers = KmerSequence::from_bytes(
+            query,
+            self.underlying_kmers.k(),
+            self.underlying_kmers.alphabet(),
+        );
         let query_super_kmers = query_kmers.compute_super_kmers(self.w);
 
         let cmp_slice_to_query = |slice: &[SuperKmer]| {
-            let l = cmp::min(slice.len(), query_super_kmers.len());
+            //let l = cmp::min(slice.len(), query_super_kmers.len());
+            let l = query_super_kmers.len();
             slice.iter().take(l).my_cmp_by(
                 query_super_kmers.iter().take(l),
                 |SuperKmer {
@@ -172,11 +206,12 @@ impl SuffixArray<StandardQuery> {
         println!("left_idx: {:?}", left_idx);
         println!("right_idx: {:?}", right_idx);
         for i in left_idx..right_idx {
+        }
+        for i in left_idx..right_idx {
             let super_kmers = suffix_array[i];
 
             let start_pos = super_kmers.first().unwrap().start_pos;
-            let end_pos =
-                super_kmers.last().unwrap().start_pos + super_kmers.last().unwrap().length - 1;
+            let end_pos = super_kmers.last().unwrap().start_pos;
             println!("start_pos: {:?}", start_pos);
             println!("end_pos: {:?}", end_pos);
 
@@ -184,7 +219,11 @@ impl SuffixArray<StandardQuery> {
                 .windows(query.len())
                 .enumerate()
             {
-                println!("COMPARING {:?} WITH {:?}", w, query);
+                println!(
+                    "COMPARING {:?} WITH {:?}",
+                    std::str::from_utf8(&w).unwrap(),
+                    std::str::from_utf8(&query).unwrap()
+                );
                 if w == query {
                     return Some(start_pos + i);
                 }
@@ -192,5 +231,51 @@ impl SuffixArray<StandardQuery> {
         }
 
         None
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::Alphabet;
+
+    #[test]
+    fn groundtruthquery_success() {
+        let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
+        let k = 3;
+        let w = 3;
+        let alphabet = Alphabet::from_bytes(sequence);
+        let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
+        let std_suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
+        let alphabet = Alphabet::from_bytes(sequence);
+        let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
+        let gt_suffix_array = SuffixArray::<GroundTruthQuery>::from_kmers(kmers, w, ());
+
+        for query_len in 5..sequence.len() {
+            for (i, window) in sequence.windows(query_len).enumerate() {
+                assert_eq!(std_suffix_array.query(window), gt_suffix_array.query(window));
+            }
+        }
+    }
+
+    #[test]
+    fn standardquery_success() {
+        let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
+        let k = 3;
+        let w = 3;
+        let alphabet = Alphabet::from_bytes(sequence);
+        let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
+        let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
+        println!("{:#?}", suffix_array);
+        //let query_result = suffix_array.query("CTGAC".as_bytes());
+        //let query_result = suffix_array.query("ACCCG".as_bytes());
+        //println!("{:#?}", query_result);
+
+        for query_len in 5..sequence.len() {
+            for (i, window) in sequence.windows(query_len).enumerate() {
+                dbg!(std::str::from_utf8(&window).unwrap());
+                assert_eq!(suffix_array.query(window), Some(i));
+            }
+        }
     }
 }

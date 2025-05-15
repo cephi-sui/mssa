@@ -10,7 +10,7 @@ use anyhow::Result;
 use clap::Parser;
 
 use suffix_array::{StandardQuery, SuffixArray};
-use transform::KmerSequence;
+use transform::{Alphabet, KmerSequence};
 
 #[derive(Parser)]
 enum Args {
@@ -36,7 +36,8 @@ fn main() -> Result<()> {
             let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
             let k = 3;
             let w = 3;
-            let kmers = KmerSequence::from_bytes(sequence, k);
+            let alphabet = Alphabet::from_bytes(sequence);
+            let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
             println!("kmers: {:#?}", kmers);
 
             println!("----------");
@@ -53,13 +54,14 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn basic_test() {
         let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
         let k = 3;
         let w = 3;
-        let kmers = KmerSequence::from_bytes(sequence, k);
+        let alphabet = Alphabet::from_bytes(sequence);
+        let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
         println!("kmers: {:#?}", kmers);
 
         println!("----------");
