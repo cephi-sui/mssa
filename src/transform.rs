@@ -1,23 +1,24 @@
 use std::{cmp::Ordering, collections::HashSet, fmt};
 
 use bimap::BiMap;
+use bincode::{Decode, Encode};
 use itertools::Itertools;
 
 use crate::int_vec::IntVec;
 
 /// A mapping from u8s in the original string to
 /// u8s that have been compressed into a smaller domain
-#[derive(Clone)]
-pub struct Alphabet(BiMap<u8, u8>);
+#[derive(Clone, Encode, Decode)]
+pub struct Alphabet(#[bincode(with_serde)] BiMap<u8, u8>);
 
 /// Represents a single k-mer.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
 pub enum Kmer {
     Data(IntVec),
     Sentinel,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Encode, Decode)]
 pub struct SuperKmer {
     // The starting position of the super-kmer in the underlying string
     pub start_pos: usize,
@@ -30,7 +31,7 @@ pub struct SuperKmer {
     pub minimizer: Kmer,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Encode, Decode)]
 pub struct KmerSequence {
     alphabet: Alphabet,
 

@@ -1,11 +1,13 @@
 use core::fmt;
 
+use bincode::{Decode, Encode};
 use bitvec::prelude::*;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct IntVec {
+    #[bincode(with_serde)]
     inner: BitVec,
     bits: usize,
 }

@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 
-use bloom::BloomFilter;
+use bincode::{Decode, Encode};
+use fastbloom::BloomFilter;
 
 use crate::iter_order_by::MyIterOrderBy;
 use crate::transform::{Kmer, KmerSequence, SuperKmer};
@@ -19,7 +20,7 @@ use crate::transform::{Kmer, KmerSequence, SuperKmer};
 /// let w = 3;
 /// let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Encode, Decode)]
 pub struct SuffixArray<T> {
     underlying_kmers: KmerSequence,
     w: usize,
@@ -43,6 +44,11 @@ pub trait QueryMode {
     ) -> Self;
 }
 
+pub trait Queryable {
+    fn query(&self, query: &[u8]) -> Option<usize>;
+}
+
+#[derive(Encode, Decode)]
 pub struct GroundTruthQuery;
 
 impl QueryMode for GroundTruthQuery {
@@ -57,7 +63,8 @@ impl QueryMode for GroundTruthQuery {
         Self {}
     }
 }
-#[derive(Debug)]
+
+#[derive(Debug, Encode, Decode)]
 pub struct StandardQuery;
 
 impl QueryMode for StandardQuery {
@@ -74,7 +81,9 @@ impl QueryMode for StandardQuery {
 }
 
 // NOTE: this is a placeholder
+#[derive(Encode, Decode)]
 pub struct BloomFilterQuery {
+    #[bincode(with_serde)]
     example: BloomFilter,
 }
 
@@ -137,8 +146,8 @@ impl<T: QueryMode> SuffixArray<T> {
 }
 
 // The ground truth query mode which performs an extremely inefficient query for testing purposes.
-impl SuffixArray<GroundTruthQuery> {
-    pub fn query(&self, query: &[u8]) -> Option<usize> {
+impl Queryable for SuffixArray<GroundTruthQuery> {
+    fn query(&self, query: &[u8]) -> Option<usize> {
         let ref_str = self.underlying_kmers.get_original_string();
         for (i, window) in ref_str.windows(query.len()).enumerate() {
             if query == window {
@@ -150,8 +159,8 @@ impl SuffixArray<GroundTruthQuery> {
 }
 
 // The standard query mode, with no accelerant data structures
-impl SuffixArray<StandardQuery> {
-    pub fn query(&self, query: &[u8]) -> Option<usize> {
+impl Queryable for SuffixArray<StandardQuery> {
+    fn query(&self, query: &[u8]) -> Option<usize> {
         assert!(
             query.len() >= self.w + self.underlying_kmers.k() - 1,
             "query length was shorter than minimum length required by w + k - 1"
