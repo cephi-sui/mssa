@@ -228,6 +228,26 @@ impl Queryable for SuffixArray<StandardQuery> {
     }
 }
 
+pub struct PWLLearnedQuery {
+    plr_segments: Vec<plr::Segment>,
+}
+
+impl QueryMode for PWLLearnedQuery {
+    /// Gamma, the maximum error used in piecewise linear regression
+    type InitParams = f64;
+
+    fn initialize_aux_data(
+        kmers: &KmerSequence,
+        w: usize,
+        suffix_array: &[&[SuperKmer]],
+        init_params: Self::InitParams,
+    ) -> Self {
+        let gamma: f64 = init_params;
+
+        todo!()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
