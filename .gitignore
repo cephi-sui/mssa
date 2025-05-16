@@ -1,2 +1,4 @@
 /target
 *.index
+flamegraph.svg
+perf.data*

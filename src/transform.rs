@@ -78,7 +78,15 @@ impl KmerSequence {
         assert!(k > 0 && k <= sequence.len());
 
         // Compute the number of bits we need to store a single underlying character
-        let bits_underlying = (alphabet.len() as u8 + 1).ilog2();
+        //let bits_underlying = (alphabet.len() as u8).ilog2();
+        let bits_underlying = if alphabet.len().is_power_of_two() {
+            alphabet.len().ilog2()
+        } else {
+            (alphabet.len().ilog2() + 1)
+        };
+
+        dbg!(bits_underlying);
+        dbg!(alphabet.len());
 
         // Construct a sequence of Kmers
         let kmers: Vec<_> = sequence

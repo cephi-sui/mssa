@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct IntVec {
     #[bincode(with_serde)]
-    inner: BitVec,
+    inner: BitVec<u8>,
     bits: usize,
 }
 
@@ -36,7 +36,7 @@ impl IntVec {
             "IntArray: N must be between 1 and 8"
         );
 
-        let inner = bitvec![usize, Lsb0; 0; 0];
+        let inner = bitvec![u8, Lsb0; 0; 0];
 
         Self { inner, bits }
     }
@@ -51,7 +51,7 @@ impl IntVec {
         );
 
         let bit_count = len.checked_mul(bits).expect("IntArray size too large");
-        let inner = bitvec![usize, Lsb0; 0; bit_count];
+        let inner = bitvec![u8, Lsb0; 0; bit_count];
 
         Self { inner, bits }
     }
