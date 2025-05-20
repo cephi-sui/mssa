@@ -5,7 +5,7 @@ use bitvec::prelude::*;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Clone, Serialize, Deserialize, Encode, Decode, Hash)]
 pub struct IntVec {
     #[bincode(with_serde)]
     inner: BitVec<u8>,

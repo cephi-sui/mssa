@@ -1,14 +1,12 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Write;
 
 use bincode::{Decode, Encode};
 use fastbloom::BloomFilter;
 use plr::regression::GreedyPLR;
 
 use crate::iter_order_by::MyIterOrderBy;
-use crate::transform::{Kmer, KmerSequence, SuperKmer};
+use crate::transform::{Kmer, KmerSequence, SuperKmer, MinimizerOrder};
 
 /// A suffix array, constructed over a sequence of kmers.
 ///
@@ -22,12 +20,14 @@ use crate::transform::{Kmer, KmerSequence, SuperKmer};
 /// ```
 /// let kmers = some_kmer_computation();
 /// let w = 3;
-/// let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
+/// let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w,
+/// MinimizerOrder::Lexicographic, ());
 /// ```
 #[derive(Debug, Encode, Decode)]
 pub struct SuffixArray<T> {
     underlying_kmers: KmerSequence,
     w: usize,
+    minimizer_order: MinimizerOrder,
 
     // NOTE: we avoid storing a Vec<&[SuperKmer]> to make serialization easier
     super_kmers: Vec<SuperKmer>,
@@ -49,7 +49,7 @@ pub trait QueryMode {
 }
 
 pub trait Queryable {
-    fn query(&self, query: &[u8]) -> Option<usize>;
+    fn query(&self, query: &[u8]) -> (Option<usize>, bool);
 }
 
 #[derive(Encode, Decode)]
@@ -96,10 +96,10 @@ impl QueryMode for BloomFilterQuery {
     type InitParams = f32;
 
     fn initialize_aux_data(
-        kmers: &KmerSequence,
-        w: usize,
-        suffix_array: &[&[SuperKmer]],
-        init_params: Self::InitParams,
+        _kmers: &KmerSequence,
+        _w: usize,
+        _suffix_array: &[&[SuperKmer]],
+        _init_params: Self::InitParams,
     ) -> Self {
         todo!()
     }
@@ -108,9 +108,14 @@ impl QueryMode for BloomFilterQuery {
 impl<T: QueryMode> SuffixArray<T> {
     // put any methods that don't need to touch query_mode_aux_data here
 
-    pub fn from_kmers(kmers: KmerSequence, w: usize, init_params: T::InitParams) -> Self {
+    pub fn from_kmers(mut kmers: KmerSequence, w: usize, o: MinimizerOrder, init_params: T::InitParams) -> Self {
+        // Generate occurrence HashMap.
+        if o == MinimizerOrder::Occurrence {
+            kmers.generate_occ();
+        }
+        let kmers = kmers; // Drop mutability.
         // Construct the suffix array
-        let mut super_kmers = kmers.compute_super_kmers(w);
+        let mut super_kmers = kmers.compute_super_kmers(w, o, None).unwrap();
         // Push sentinel kmer.
         super_kmers.push(SuperKmer {
             start_pos: kmers.get_original_string_len(),
@@ -142,29 +147,38 @@ impl<T: QueryMode> SuffixArray<T> {
         Self {
             underlying_kmers: kmers,
             w,
+            minimizer_order: o,
             super_kmers,
             suffix_array,
             query_mode_aux_data,
         }
     }
+
+    pub fn get_underlying_kmers(&self) -> &KmerSequence {
+        &self.underlying_kmers
+    }
+
+    pub fn w(&self) -> usize {
+        self.w
+    }
 }
 
 // The ground truth query mode which performs an extremely inefficient query for testing purposes.
 impl Queryable for SuffixArray<GroundTruthQuery> {
-    fn query(&self, query: &[u8]) -> Option<usize> {
+    fn query(&self, query: &[u8]) -> (Option<usize>, bool) {
         let ref_str = self.underlying_kmers.get_original_string();
         for (i, window) in ref_str.windows(query.len()).enumerate() {
             if query == window {
-                return Some(i);
+                return (Some(i), false);
             }
         }
-        None
+        (None, false)
     }
 }
 
 // The standard query mode, with no accelerant data structures
 impl Queryable for SuffixArray<StandardQuery> {
-    fn query(&self, query: &[u8]) -> Option<usize> {
+    fn query(&self, query: &[u8]) -> (Option<usize>, bool) {
         assert!(
             query.len() >= self.w + self.underlying_kmers.k() - 1,
             "query length was shorter than minimum length required by w + k - 1"
@@ -175,7 +189,8 @@ impl Queryable for SuffixArray<StandardQuery> {
             self.underlying_kmers.k(),
             self.underlying_kmers.alphabet(),
         );
-        let query_super_kmers = query_kmers.compute_super_kmers(self.w);
+        let query_super_kmers = query_kmers.compute_super_kmers(self.w, self.minimizer_order, Some(&self.underlying_kmers));
+        let Some(query_super_kmers) = query_super_kmers else { return (None, false) };
 
         let cmp_slice_to_query = |slice: &[SuperKmer]| {
             //let l = cmp::min(slice.len(), query_super_kmers.len());
@@ -204,7 +219,7 @@ impl Queryable for SuffixArray<StandardQuery> {
 
         if left_idx == right_idx {
             // Query not present
-            return None;
+            return (None, false);
         }
 
         // Query could be present anywhere in the range
@@ -223,12 +238,12 @@ impl Queryable for SuffixArray<StandardQuery> {
                 .enumerate()
             {
                 if w == query {
-                    return Some(start_pos + i);
+                    return (Some(start_pos + i), false);
                 }
             }
         }
 
-        None
+        (None, true)
     }
 }
 
@@ -325,7 +340,7 @@ impl QueryMode for PWLLearnedQuery {
 }
 
 impl Queryable for SuffixArray<PWLLearnedQuery> {
-    fn query(&self, query: &[u8]) -> Option<usize> {
+    fn query(&self, query: &[u8]) -> (Option<usize>, bool) {
         assert!(
             query.len() >= self.w + self.underlying_kmers.k() - 1,
             "query length was shorter than minimum length required by w + k - 1"
@@ -336,7 +351,8 @@ impl Queryable for SuffixArray<PWLLearnedQuery> {
             self.underlying_kmers.k(),
             self.underlying_kmers.alphabet(),
         );
-        let query_super_kmers = query_kmers.compute_super_kmers(self.w);
+        let query_super_kmers = query_kmers.compute_super_kmers(self.w, self.minimizer_order, Some(&self.underlying_kmers));
+        let Some(query_super_kmers) = query_super_kmers else { return (None, false) };
 
         let cmp_slice_to_query = |slice: &[SuperKmer]| {
             let l = query_super_kmers.len();
@@ -400,7 +416,7 @@ impl Queryable for SuffixArray<PWLLearnedQuery> {
 
         if left_idx == right_idx {
             // Query not present
-            return None;
+            return (None, false);
         }
 
         // Query could be present anywhere in the range
@@ -419,12 +435,12 @@ impl Queryable for SuffixArray<PWLLearnedQuery> {
                 .enumerate()
             {
                 if w == query {
-                    return Some(start_pos + i);
+                    return (Some(start_pos + i), false);
                 }
             }
         }
 
-        None
+        (None, true)
     }
 }
 
@@ -440,16 +456,16 @@ mod test {
         let w = 3;
         let alphabet = Alphabet::from_bytes(sequence);
         let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
-        let std_suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
+        let std_suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, MinimizerOrder::Lexicographic, ());
         let alphabet = Alphabet::from_bytes(sequence);
         let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
-        let gt_suffix_array = SuffixArray::<GroundTruthQuery>::from_kmers(kmers, w, ());
+        let gt_suffix_array = SuffixArray::<GroundTruthQuery>::from_kmers(kmers, w, MinimizerOrder::Lexicographic, ());
 
         for query_len in 5..sequence.len() {
             for (i, window) in sequence.windows(query_len).enumerate() {
                 assert_eq!(
-                    std_suffix_array.query(window),
-                    gt_suffix_array.query(window)
+                    std_suffix_array.query(window).0,
+                    gt_suffix_array.query(window).0
                 );
             }
         }
@@ -458,24 +474,26 @@ mod test {
     #[test]
     fn standardquery_success() {
         let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
-        for k in 1..sequence.len() {
-            for w in 1..sequence.len() - k + 1 {
-                let alphabet = Alphabet::from_bytes(sequence);
-                let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
-                let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
+        for o in [MinimizerOrder::Lexicographic, MinimizerOrder::Occurrence].into_iter() {
+            for k in 1..sequence.len() {
+                for w in 1..sequence.len() - k + 1 {
+                    let alphabet = Alphabet::from_bytes(sequence);
+                    let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
+                    let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, o, ());
 
-                let alphabet = Alphabet::from_bytes(sequence);
-                let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
-                let suffix_array_gt = SuffixArray::<GroundTruthQuery>::from_kmers(kmers, w, ());
+                    let alphabet = Alphabet::from_bytes(sequence);
+                    let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
+                    let suffix_array_gt = SuffixArray::<GroundTruthQuery>::from_kmers(kmers, w, o, ());
 
-                println!("{:#?}", suffix_array);
+                    println!("{:#?}", suffix_array);
 
-                for query_len in (k + w - 1)..sequence.len() {
-                    for window in sequence.windows(query_len) {
-                        dbg!(std::str::from_utf8(&window).unwrap());
-                        match suffix_array.query(window) {
-                            Some(i) => assert_eq!(&sequence[i..(i + window.len())], window),
-                            None => assert!(suffix_array_gt.query(window).is_none()),
+                    for query_len in (k + w - 1)..sequence.len() {
+                        for window in sequence.windows(query_len) {
+                            dbg!(std::str::from_utf8(&window).unwrap());
+                            match suffix_array.query(window).0 {
+                                Some(i) => assert_eq!(&sequence[i..(i + window.len())], window),
+                                None => assert!(suffix_array_gt.query(window).0.is_none()),
+                            }
                         }
                     }
                 }
@@ -486,37 +504,39 @@ mod test {
     #[test]
     fn standardquery_nomatch() {
         let sequence = "ACTGACCCGTAGCGCTA".as_bytes();
-        let k = 3;
-        let w = 3;
-        let alphabet = Alphabet::from_bytes(sequence);
-        let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
-        let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
+        for o in [MinimizerOrder::Lexicographic, MinimizerOrder::Occurrence].into_iter() {
+            let k = 3;
+            let w = 3;
+            let alphabet = Alphabet::from_bytes(sequence);
+            let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
+            let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, o, ());
 
-        for query_len in 5..sequence.len() {
-            for (i, window) in sequence.windows(query_len).enumerate() {
-                let mut window = window.to_owned();
-                window[0] = if window[0] != b'A' { b'A' } else { b'C' };
-                assert_eq!(suffix_array.query(&window), None);
+            for query_len in 5..sequence.len() {
+                for (i, window) in sequence.windows(query_len).enumerate() {
+                    let mut window = window.to_owned();
+                    window[0] = if window[0] != b'A' { b'A' } else { b'C' };
+                    assert_eq!(suffix_array.query(&window).0, None);
+                }
             }
-        }
 
-        for query_len in 5..sequence.len() {
-            for (i, window) in sequence.windows(query_len).enumerate() {
-                let mut window = window.to_owned();
-                window[query_len - 1] = if window[query_len - 1] != b'A' {
-                    b'A'
-                } else {
-                    b'C'
-                };
-                assert_eq!(suffix_array.query(&window), None);
+            for query_len in 5..sequence.len() {
+                for (i, window) in sequence.windows(query_len).enumerate() {
+                    let mut window = window.to_owned();
+                    window[query_len - 1] = if window[query_len - 1] != b'A' {
+                        b'A'
+                    } else {
+                        b'C'
+                    };
+                    assert_eq!(suffix_array.query(&window).0, None);
+                }
             }
-        }
 
-        for query_len in 5..sequence.len() {
-            for (i, window) in sequence.windows(query_len).enumerate() {
-                let mut window = window.to_owned();
-                window[1] = if window[1] != b'A' { b'A' } else { b'C' };
-                assert_eq!(suffix_array.query(&window), None);
+            for query_len in 5..sequence.len() {
+                for (i, window) in sequence.windows(query_len).enumerate() {
+                    let mut window = window.to_owned();
+                    window[1] = if window[1] != b'A' { b'A' } else { b'C' };
+                    assert_eq!(suffix_array.query(&window).0, None);
+                }
             }
         }
     }
@@ -537,26 +557,61 @@ mod test {
         let w = 3;
         let alphabet = Alphabet::from_bytes(sequence);
         let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
-        let suffix_array_standard = SuffixArray::<PWLLearnedQuery>::from_kmers(kmers, w, 1000.0);
+        let suffix_array_standard = SuffixArray::<PWLLearnedQuery>::from_kmers(kmers, w, MinimizerOrder::Lexicographic, 1000.0);
 
         let alphabet = Alphabet::from_bytes(sequence);
         let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
-        let suffix_array_ground_truth = SuffixArray::<GroundTruthQuery>::from_kmers(kmers, w, ());
+        let suffix_array_ground_truth = SuffixArray::<GroundTruthQuery>::from_kmers(kmers, w, MinimizerOrder::Lexicographic, ());
 
         for query in queries {
-            let result = suffix_array_standard.query(query);
+            let result = suffix_array_standard.query(query).0;
             match result {
                 Some(i) => {
                     // ensure that the string is actually present
                     let slice = &sequence[i..(i + query.len())];
                     assert_eq!(slice, query);
                 }
-                None => assert!(suffix_array_ground_truth.query(query).is_none()),
+                None => assert!(suffix_array_ground_truth.query(query).0.is_none()),
             }
 
             // The below doesn't work because StandardQuery and GroundTruthQuery might return
             // different occurences of the same query in the genome. Duh!
             // assert_eq!(suffix_array_standard.query(query), suffix_array_ground_truth.query(query));
+        }
+    }
+
+    #[test]
+    fn assignment1_test_data_occurrence() {
+        let genome_file =
+            read_sequences("test_input/a1-tests/test_input/salmonella_sub.fa").unwrap();
+        let query_file = read_sequences("test_input/a1-tests/test_input/reads_sal_sub.fq").unwrap();
+
+        let sequence = genome_file.get(0).unwrap().representation.as_slice();
+        let queries: Vec<&[u8]> = query_file
+            .iter()
+            .map(|q| q.representation.as_slice())
+            .collect();
+
+        let k = 3;
+        let w = 3;
+        let alphabet = Alphabet::from_bytes(sequence);
+        let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
+        let suffix_array_standard = SuffixArray::<StandardQuery>::from_kmers(kmers, w, MinimizerOrder::Occurrence, ());
+
+        let alphabet = Alphabet::from_bytes(sequence);
+        let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
+        let suffix_array_ground_truth = SuffixArray::<GroundTruthQuery>::from_kmers(kmers, w, MinimizerOrder::Occurrence, ());
+
+        for query in queries {
+            let result = suffix_array_standard.query(query).0;
+            match result {
+                Some(i) => {
+                    // ensure that the string is actually present
+                    let slice = &sequence[i..(i + query.len())];
+                    assert_eq!(slice, query);
+                }
+                None => assert!(suffix_array_ground_truth.query(query).0.is_none()),
+            }
         }
     }
 }

@@ -17,6 +17,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 # Need use-system-libs to get gmp-mpfr-sys to work for whatever reason
 gmp-mpfr-sys = { version = "1.6.5", features = ["use-system-libs"] }
 plr = "0.3.1"
+rand = "0.9.1"
 
 [dev-dependencies]
 rand = "0.9.1"

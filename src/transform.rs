@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::HashSet, fmt};
+use std::{cmp::Ordering, collections::{HashSet, HashMap}, fmt};
 
 use bimap::BiMap;
 use bincode::{Decode, Encode};
@@ -12,7 +12,7 @@ use crate::int_vec::IntVec;
 pub struct Alphabet(#[bincode(with_serde)] BiMap<u8, u8>);
 
 /// Represents a single k-mer.
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Hash)]
 pub enum Kmer {
     Data(IntVec),
     Sentinel,
@@ -36,11 +36,18 @@ pub struct KmerSequence {
     alphabet: Alphabet,
 
     kmers: Vec<Kmer>,
+    occ: Option<HashMap<Kmer, usize>>,
 
     // TODO: can we efficiently compute this from kmers?
     original_string: Vec<u8>,
 
     k: usize,
+}
+
+#[derive(Debug, PartialEq, Copy, Clone, clap::ValueEnum, Encode, Decode)]
+pub enum MinimizerOrder {
+    Lexicographic,
+    Occurrence,
 }
 
 impl Alphabet {
@@ -101,9 +108,20 @@ impl KmerSequence {
         Self {
             kmers,
             k,
+            occ: None,
             alphabet,
             original_string: sequence.to_owned(),
         }
+    }
+
+    pub fn generate_occ(&mut self) -> () {
+        let mut occ = HashMap::new();
+        for kmer in self.kmers.iter() {
+            occ.entry(kmer.clone())
+                .and_modify(|v| {*v += 1})
+                .or_insert(0);
+        }
+        self.occ = Some(occ);
     }
 
     pub fn get_original_string(&self) -> &[u8] {
@@ -142,9 +160,39 @@ impl KmerSequence {
             .collect()
     }
 
-    pub fn compute_super_kmers(&self, w: usize) -> Vec<SuperKmer> {
+    pub fn compute_minimizer_chain2(&self, w: usize, reference: Option<&KmerSequence>) -> Option<Vec<&Kmer>> {
+        assert!(self.kmers.len() >= w);
+        assert!(w >= 1);
+
+        let occ = if let Some(reference) = reference { &reference.occ.as_ref().expect("Reference needs generate_occ() call for occurrence minimizer order") } else { &self.occ.as_ref().expect("Reference needs generate_occ() call for occurrence minimizer order") };
+
+        if let Some(_) = reference {
+            let all_kmers_present = self.kmers.iter().fold(true, |acc, x| acc && if occ.get(x) == None { false } else { true });
+            if !all_kmers_present {
+                return None;
+            }
+        }
+
+        Some(self.kmers
+            .windows(w)
+            .map(|window| {
+                window
+                    .iter()
+                    .min_by(|&kmer1, &kmer2| occ.get(kmer1).unwrap().cmp(occ.get(kmer2).unwrap()))
+                    .unwrap()
+            })
+            .collect())
+    }
+
+    pub fn compute_super_kmers(&self, w: usize, o: MinimizerOrder, reference: Option<&KmerSequence>) -> Option<Vec<SuperKmer>> {
         // Compute the minimizer chain
-        let mut minimizers = self.compute_minimizer_chain(w).into_iter().enumerate();
+        let mut minimizers = match o {
+            MinimizerOrder::Lexicographic => self.compute_minimizer_chain(w).into_iter().enumerate(),
+            MinimizerOrder::Occurrence => {
+                let min_chain = self.compute_minimizer_chain2(w, reference)?;
+                min_chain.into_iter().enumerate()
+            },
+        };
 
         // De-duplication (taking the first start position and accumulating lengths)
         let mut super_kmers: Vec<SuperKmer> = Vec::new();
@@ -174,7 +222,7 @@ impl KmerSequence {
             minimizer: curr_minimizer.clone(),
         });
 
-        super_kmers
+        Some(super_kmers)
     }
 
     pub fn alphabet(&self) -> Alphabet {
