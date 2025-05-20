@@ -294,6 +294,7 @@ dependencies = [
  "gmp-mpfr-sys",
  "itertools",
  "plr",
+ "rand",
  "serde",
 ]
 

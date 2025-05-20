@@ -78,15 +78,11 @@ impl KmerSequence {
         assert!(k > 0 && k <= sequence.len());
 
         // Compute the number of bits we need to store a single underlying character
-        //let bits_underlying = (alphabet.len() as u8).ilog2();
         let bits_underlying = if alphabet.len().is_power_of_two() {
             alphabet.len().ilog2()
         } else {
-            (alphabet.len().ilog2() + 1)
+            alphabet.len().ilog2() + 1
         };
-
-        dbg!(bits_underlying);
-        dbg!(alphabet.len());
 
         // Construct a sequence of Kmers
         let kmers: Vec<_> = sequence
@@ -188,6 +184,13 @@ impl KmerSequence {
     pub fn k(&self) -> usize {
         self.k
     }
+
+    pub fn kmer_to_integer(&self, kmer: &Kmer) -> u128 {
+        match kmer {
+            Kmer::Data(d) => d.as_u128(self.alphabet.len()),
+            Kmer::Sentinel => panic!("called Kmer::to_integer() on sentinel k-kmer"),
+        }
+    }
 }
 
 impl fmt::Debug for Kmer {
@@ -214,5 +217,33 @@ impl fmt::Debug for Alphabet {
 
 #[cfg(test)]
 mod tests {
+    use rand::Rng;
+
     use super::*;
+
+    #[test]
+    fn kmer_u128_ordering() {
+        let mut rng = rand::rng();
+
+        for k in 1..10 {
+            let base_str = "ACTGACTGACTGACTGACTGACTGACTGACTG".as_bytes();
+            let alphabet = Alphabet::from_bytes(base_str);
+            let base_kmers = KmerSequence::from_bytes(base_str, k, alphabet);
+
+            for _ in 0..100000 {
+                let vals1: Vec<u8> = (0..k).map(|_| rng.random_range(0..4)).collect();
+                let vals2: Vec<u8> = (0..k).map(|_| rng.random_range(0..4)).collect();
+
+                let kmer1 = Kmer::Data(IntVec::from_iter(2, vals1.into_iter()));
+                let kmer2 = Kmer::Data(IntVec::from_iter(2, vals2.into_iter()));
+
+                let ord1 = base_kmers.compare_kmers(&kmer1, &kmer2);
+                let ord2 = base_kmers
+                    .kmer_to_integer(&kmer1)
+                    .cmp(&base_kmers.kmer_to_integer(&kmer2));
+
+                assert_eq!(ord1, ord2);
+            }
+        }
+    }
 }

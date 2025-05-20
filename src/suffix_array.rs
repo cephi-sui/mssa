@@ -1,7 +1,11 @@
 use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::Write;
 
 use bincode::{Decode, Encode};
 use fastbloom::BloomFilter;
+use plr::regression::GreedyPLR;
 
 use crate::iter_order_by::MyIterOrderBy;
 use crate::transform::{Kmer, KmerSequence, SuperKmer};
@@ -228,23 +232,199 @@ impl Queryable for SuffixArray<StandardQuery> {
     }
 }
 
+#[derive(Encode, Decode)]
 pub struct PWLLearnedQuery {
-    plr_segments: Vec<plr::Segment>,
+    // TODO: find a more efficient way to do lookups among the segments?
+    #[bincode(with_serde)]
+    plr_begin_segments: Vec<plr::Segment>,
+    #[bincode(with_serde)]
+    plr_end_segments: Vec<plr::Segment>,
+
+    // TODO: delete this field
+    ranges_gt: HashMap<u128, (usize, usize)>,
+
+    gamma: f64,
 }
 
 impl QueryMode for PWLLearnedQuery {
-    /// Gamma, the maximum error used in piecewise linear regression
+    /// gamma, the maximum error used in piecewise linear regression
+    /// TODO: add an option to take the first x super-kmers, rather than just the first one
     type InitParams = f64;
 
     fn initialize_aux_data(
         kmers: &KmerSequence,
-        w: usize,
+        _w: usize,
         suffix_array: &[&[SuperKmer]],
         init_params: Self::InitParams,
     ) -> Self {
         let gamma: f64 = init_params;
 
-        todo!()
+        let sa_len = suffix_array.len();
+        let mut suffix_array = suffix_array.into_iter().enumerate();
+
+        let mut ranges: Vec<(u128, usize, usize)> = Vec::new();
+        let mut curr_start_i = 0;
+        let mut curr_start_kmer =
+            kmers.kmer_to_integer(&suffix_array.next().unwrap().1.first().unwrap().minimizer);
+        for (i, &suffix) in suffix_array {
+            let start_kmer = &suffix.first().unwrap().minimizer;
+
+            if *start_kmer == Kmer::Sentinel {
+                continue;
+            }
+
+            let start_kmer = kmers.kmer_to_integer(start_kmer);
+
+            if start_kmer != curr_start_kmer {
+                // Add the "previous" range from curr_start_i to i
+                ranges.push((curr_start_kmer, curr_start_i, i - 1));
+
+                // reset the current element
+                curr_start_i = i;
+                curr_start_kmer = start_kmer;
+            }
+        }
+        // Special case: add the last range
+        ranges.push((curr_start_kmer, curr_start_i, sa_len - 1));
+
+        println!("number of distinct k-kmers: {:?}", ranges.len());
+
+        // Construct the piecewise approximation functions
+        // (begin for the beginning of ranges, end for end)
+        let mut plr_begin = GreedyPLR::new(gamma);
+        let mut plr_end = GreedyPLR::new(gamma);
+        let mut plr_begin_segments = Vec::new();
+        let mut plr_end_segments = Vec::new();
+        for (kmer, begin, end) in ranges.clone() {
+            // handle begin
+            if let Some(segment) = plr_begin.process(kmer as f64, begin as f64) {
+                plr_begin_segments.push(segment);
+            }
+
+            // handle end
+            if let Some(segment) = plr_end.process(kmer as f64, end as f64) {
+                plr_end_segments.push(segment);
+            }
+        }
+
+        // Special case: flush the buffer for last element
+        if let Some(segment) = plr_begin.finish() {
+            plr_begin_segments.push(segment);
+        }
+        if let Some(segment) = plr_end.finish() {
+            plr_end_segments.push(segment);
+        }
+
+        Self {
+            plr_begin_segments,
+            plr_end_segments,
+            gamma,
+            ranges_gt: HashMap::from_iter(ranges.iter().map(|(x, y, z)| (*x, (*y, *z)))),
+        }
+    }
+}
+
+impl Queryable for SuffixArray<PWLLearnedQuery> {
+    fn query(&self, query: &[u8]) -> Option<usize> {
+        assert!(
+            query.len() >= self.w + self.underlying_kmers.k() - 1,
+            "query length was shorter than minimum length required by w + k - 1"
+        );
+
+        let query_kmers = KmerSequence::from_bytes(
+            query,
+            self.underlying_kmers.k(),
+            self.underlying_kmers.alphabet(),
+        );
+        let query_super_kmers = query_kmers.compute_super_kmers(self.w);
+
+        let cmp_slice_to_query = |slice: &[SuperKmer]| {
+            let l = query_super_kmers.len();
+            slice.iter().take(l).my_cmp_by(
+                query_super_kmers.iter().take(l),
+                |SuperKmer {
+                     minimizer: minimizer1,
+                     ..
+                 },
+                 SuperKmer {
+                     minimizer: minimizer2,
+                     ..
+                 }| self.underlying_kmers.compare_kmers(minimizer1, minimizer2),
+            )
+        };
+
+        let sa_len = self.suffix_array.len();
+
+        // Get the start/end bound from the PWL function
+        // TODO: should `error` be a little larger here to account for floating-point error going
+        // from u128 to f64?
+        let error = self.query_mode_aux_data.gamma.ceil() as usize;
+        let first_kmer: u128 = self
+            .underlying_kmers
+            .kmer_to_integer(&query_super_kmers.first().unwrap().minimizer);
+        let lookup = |segments: &[plr::Segment], x: u128| {
+            let x = x as f64;
+            let segment = segments
+                .iter()
+                .find(|&segment| segment.start <= x && x < segment.stop)
+                .unwrap();
+            segment.slope * x + segment.intercept
+        };
+        // Compute bounds from PWL function
+        let left_bound = lookup(&self.query_mode_aux_data.plr_begin_segments, first_kmer) as usize;
+        let right_bound =
+            lookup(&self.query_mode_aux_data.plr_end_segments, first_kmer).ceil() as usize;
+        // Account for error and clamp accordingly
+        let left_bound = left_bound.saturating_sub(error);
+        let right_bound = right_bound.saturating_add(error).clamp(0, sa_len - 1);
+        let suffix_array = &self.suffix_array[left_bound..(right_bound + 1)];
+
+        println!(
+            "starting binary search over bounds {:?}..{:?}",
+            left_bound, right_bound
+        );
+        println!(
+            "  --> {:?} elements ({:.3?}% of suffix array)",
+            right_bound - left_bound + 1,
+            (right_bound - left_bound + 1) as f64 / self.suffix_array.len() as f64 * 100.0
+        );
+
+        // Look for first index in suffix array == kmer
+        let left_idx = suffix_array.partition_point(|&s| {
+            cmp_slice_to_query(&self.super_kmers[s..self.super_kmers.len()]) == Ordering::Less
+        });
+        // Look for first index in suffix array > kmer
+        let right_idx = suffix_array.partition_point(|&s| {
+            cmp_slice_to_query(&self.super_kmers[s..self.super_kmers.len()]) != Ordering::Greater
+        });
+
+        if left_idx == right_idx {
+            // Query not present
+            return None;
+        }
+
+        // Query could be present anywhere in the range
+        let original_string = self.underlying_kmers.get_original_string();
+        for i in left_idx..right_idx {
+            let super_kmers = &self.super_kmers[suffix_array[i]..self.super_kmers.len()]
+                [0..query_super_kmers.len()];
+
+            let first_super_kmer = super_kmers.first().unwrap();
+            let last_super_kmer = super_kmers.last().unwrap();
+            let start_pos = first_super_kmer.start_pos;
+            let end_pos = last_super_kmer.start_pos + last_super_kmer.length;
+
+            for (i, w) in original_string[start_pos..end_pos]
+                .windows(query.len())
+                .enumerate()
+            {
+                if w == query {
+                    return Some(start_pos + i);
+                }
+            }
+        }
+
+        None
     }
 }
 
@@ -353,11 +533,11 @@ mod test {
             .map(|q| q.representation.as_slice())
             .collect();
 
-        let k = 3;
+        let k = 5;
         let w = 3;
         let alphabet = Alphabet::from_bytes(sequence);
         let kmers = KmerSequence::from_bytes(sequence, k, alphabet);
-        let suffix_array_standard = SuffixArray::<StandardQuery>::from_kmers(kmers, w, ());
+        let suffix_array_standard = SuffixArray::<PWLLearnedQuery>::from_kmers(kmers, w, 1000.0);
 
         let alphabet = Alphabet::from_bytes(sequence);
         let kmers = KmerSequence::from_bytes(sequence, k, alphabet);

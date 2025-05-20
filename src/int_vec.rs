@@ -112,6 +112,19 @@ impl IntVec {
         self.inner.extend_from_bitslice(&val_bits);
     }
 
+    /// Returns the entire IntVec as a u128.
+    /// Panics if the IntVec is longer than 128 bits.
+    pub fn as_u128(&self, alphabet_size: usize) -> u128 {
+        let vals: Vec<u8> = self.iter().collect();
+
+        let mut result = 0u128;
+        for (i, &v) in vals.iter().rev().enumerate() {
+            result += ((alphabet_size as u128).pow(i as u32) * v as u128) as u128;
+        }
+
+        result
+    }
+
     pub fn iter(&self) -> IntVecIterator {
         IntVecIterator {
             intvec: self,

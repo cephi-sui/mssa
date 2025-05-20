@@ -12,7 +12,8 @@ use clap::{Parser, ValueEnum};
 
 use fasta::Sequence;
 use suffix_array::{
-    BloomFilterQuery, GroundTruthQuery, QueryMode, Queryable, StandardQuery, SuffixArray,
+    BloomFilterQuery, GroundTruthQuery, PWLLearnedQuery, QueryMode, Queryable, StandardQuery,
+    SuffixArray,
 };
 use transform::{Alphabet, KmerSequence};
 
@@ -21,6 +22,7 @@ enum QueryType {
     GroundTruthQuery,
     StandardQuery,
     BloomFilterQuery,
+    PWLLearnedQuery,
 }
 
 #[derive(Parser)]
@@ -35,6 +37,10 @@ enum Args {
         // BloomFilterQuery options
         #[arg(short, long)]
         bloom_filter_fpr: Option<f32>,
+
+        // PWLLearnedQuery options
+        #[arg(short, long)]
+        piecewise_linear_gamma: Option<f64>,
     },
     Query {
         fasta_file: PathBuf,
@@ -57,6 +63,7 @@ fn main() -> Result<()> {
             suffix_array_file,
             query_type,
             bloom_filter_fpr,
+            piecewise_linear_gamma,
         } => {
             let sequences = fasta::read_sequences(fasta_file)?;
             let suffix_array_file = &mut File::create(suffix_array_file)?;
@@ -118,6 +125,28 @@ fn main() -> Result<()> {
                         bincode_config,
                     )?;
                 }
+                QueryType::PWLLearnedQuery => {
+                    let mut suffix_arrays = Vec::new();
+                    for sequence in sequences {
+                        let alphabet = Alphabet::from_bytes(&sequence.representation);
+                        let kmers = KmerSequence::from_bytes(&sequence.representation, k, alphabet);
+
+                        let suffix_array = SuffixArray::<PWLLearnedQuery>::from_kmers(
+                            kmers,
+                            w,
+                            piecewise_linear_gamma
+                                .context("Expected piecewise linear regression gamma factor")?,
+                        );
+
+                        suffix_arrays.push(suffix_array);
+                    }
+
+                    bincode::encode_into_std_write(
+                        suffix_arrays,
+                        suffix_array_file,
+                        bincode_config,
+                    )?;
+                }
             }
         }
         Args::Query {
@@ -159,6 +188,7 @@ fn main() -> Result<()> {
                     //let result = query(suffix_arrays, sequences);
                     //println!("{:?}", result);
                 }
+                QueryType::PWLLearnedQuery => todo!(),
             }
         }
     }
