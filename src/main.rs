@@ -76,7 +76,7 @@ fn main() -> Result<()> {
         } => {
             let sequences = fasta::read_sequences(fasta_file)?;
             if sequences.len() > 1 {
-                return Err(anyhow!("Expected only one sequence in FASTA file"));
+                eprintln!("Expected only one sequence in FASTA file. Continuing with the first sequence...");
             }
             let sequence = sequences.into_iter().take(1).next().context("Expected one sequence in FASTA file")?;
             let suffix_array_file = &mut File::create(suffix_array_file)?;
