@@ -27,7 +27,7 @@ pub fn generate_sequences(reference: &[u8], num: usize, match_rate: f64, min_len
     //let mut rng = rang::rng();
     let mut result = Vec::new();
     for i in 0..num {
-        let length = rand::random_range(min_len..=max_len);
+        let length = rand::random_range(min_len..=std::cmp::min(max_len, reference.len()));
         if rand::random_bool(match_rate) {
             let start_pos = rand::random_range(0..reference.len() - length);
             let r = &reference[start_pos..start_pos + length];
