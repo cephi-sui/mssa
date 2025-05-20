@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::collections::HashMap;
 
 use bincode::{Decode, Encode};
 use fastbloom::BloomFilter;
@@ -255,9 +254,6 @@ pub struct PWLLearnedQuery {
     #[bincode(with_serde)]
     plr_end_segments: Vec<plr::Segment>,
 
-    // TODO: delete this field
-    ranges_gt: HashMap<u128, (usize, usize)>,
-
     gamma: f64,
 }
 
@@ -334,7 +330,6 @@ impl QueryMode for PWLLearnedQuery {
             plr_begin_segments,
             plr_end_segments,
             gamma,
-            ranges_gt: HashMap::from_iter(ranges.iter().map(|(x, y, z)| (*x, (*y, *z)))),
         }
     }
 }
@@ -395,15 +390,15 @@ impl Queryable for SuffixArray<PWLLearnedQuery> {
         let right_bound = right_bound.saturating_add(error).clamp(0, sa_len - 1);
         let suffix_array = &self.suffix_array[left_bound..(right_bound + 1)];
 
-        println!(
-            "starting binary search over bounds {:?}..{:?}",
-            left_bound, right_bound
-        );
-        println!(
-            "  --> {:?} elements ({:.3?}% of suffix array)",
-            right_bound - left_bound + 1,
-            (right_bound - left_bound + 1) as f64 / self.suffix_array.len() as f64 * 100.0
-        );
+        // println!(
+        //     "starting binary search over bounds {:?}..{:?}",
+        //     left_bound, right_bound
+        // );
+        // println!(
+        //     "  --> {:?} elements ({:.3?}% of suffix array)",
+        //     right_bound - left_bound + 1,
+        //     (right_bound - left_bound + 1) as f64 / self.suffix_array.len() as f64 * 100.0
+        // );
 
         // Look for first index in suffix array == kmer
         let left_idx = suffix_array.partition_point(|&s| {

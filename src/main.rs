@@ -4,7 +4,7 @@ mod iter_order_by;
 mod suffix_array;
 mod transform;
 
-use std::{fs::File, path::PathBuf};
+use std::{fs::File, path::PathBuf, time::{Duration, Instant}};
 
 use anyhow::{anyhow, Context, Result};
 use bincode;
@@ -80,6 +80,10 @@ fn main() -> Result<()> {
             }
             let sequence = sequences.into_iter().take(1).next().context("Expected one sequence in FASTA file")?;
             let suffix_array_file = &mut File::create(suffix_array_file)?;
+
+            let before = Instant::now();
+            let time_elapsed: Duration;
+
             match query_type {
                 QueryType::GroundTruthQuery => {
                     let mut suffix_arrays = Vec::new();
@@ -90,6 +94,8 @@ fn main() -> Result<()> {
                         SuffixArray::<GroundTruthQuery>::from_kmers(kmers, w, minimizer_order, ());
 
                     suffix_arrays.push(suffix_array);
+
+                    time_elapsed = before.elapsed();
 
                     bincode::encode_into_std_write(
                         suffix_arrays,
@@ -105,6 +111,8 @@ fn main() -> Result<()> {
                     let suffix_array = SuffixArray::<StandardQuery>::from_kmers(kmers, w, minimizer_order, ());
 
                     suffix_arrays.push(suffix_array);
+
+                    time_elapsed = before.elapsed();
 
                     bincode::encode_into_std_write(
                         suffix_arrays,
@@ -127,6 +135,8 @@ fn main() -> Result<()> {
 
                     suffix_arrays.push(suffix_array);
 
+                    time_elapsed = before.elapsed();
+
                     bincode::encode_into_std_write(
                         suffix_arrays,
                         suffix_array_file,
@@ -148,6 +158,8 @@ fn main() -> Result<()> {
 
                         suffix_arrays.push(suffix_array);
 
+                    time_elapsed = before.elapsed();
+
                     bincode::encode_into_std_write(
                         suffix_arrays,
                         suffix_array_file,
@@ -155,6 +167,8 @@ fn main() -> Result<()> {
                     )?;
                 }
             }
+
+            println!("index build time: {:?}", time_elapsed);
         }
         Args::Query {
             fasta_file,
@@ -172,7 +186,7 @@ fn main() -> Result<()> {
                             })?;
 
                     let result = query(suffix_arrays, sequences);
-                    println!("{:?}", result.0);
+                    // println!("{:?}", result.0);
                     println!("False positive rate: {:?}", result.1);
                 }
                 QueryType::StandardQuery => {
@@ -183,7 +197,7 @@ fn main() -> Result<()> {
                             })?;
 
                     let result = query(suffix_arrays, sequences);
-                    println!("{:?}", result.0);
+                    // println!("{:?}", result.0);
                     println!("False positive rate: {:?}", result.1);
                 }
                 QueryType::BloomFilterQuery => {
@@ -197,7 +211,7 @@ fn main() -> Result<()> {
                             })?;
 
                     let result = query(suffix_arrays, sequences);
-                    println!("{:?}", result.0);
+                    // println!("{:?}", result.0);
                     println!("False positive rate: {:?}", result.1);
                 },
             }
@@ -210,6 +224,8 @@ fn main() -> Result<()> {
             query_type,
         } => {
             let suffix_array_file = &mut File::open(suffix_array_file)?;
+
+            let before = Instant::now();
 
             match query_type {
                 QueryType::GroundTruthQuery => {
@@ -225,10 +241,11 @@ fn main() -> Result<()> {
 
                     let sequences = fasta::generate_sequences(suffix_arrays[0].get_underlying_kmers().get_original_string(), num_queries, match_rate, min_len, max_query_length);
 
-                    println!("{:?}", sequences);
+                    // println!("{:?}", sequences);
 
+                    println!("Original string length: {:?} bytes", suffix_arrays[0].get_underlying_kmers().get_original_string().len());
                     let result = query(suffix_arrays, sequences);
-                    println!("{:?}", result.0);
+                    // println!("{:?}", result.0);
                     println!("False positive rate: {:?}", result.1);
                 },
                 QueryType::StandardQuery => {
@@ -246,6 +263,7 @@ fn main() -> Result<()> {
 
                     //println!("{:?}", sequences);
 
+                    println!("Original string length: {:?} bytes", suffix_arrays[0].get_underlying_kmers().get_original_string().len());
                     let result = query(suffix_arrays, sequences);
                     //println!("{:?}", result.0);
                     println!("False positive rate: {:?}", result.1);
@@ -268,11 +286,14 @@ fn main() -> Result<()> {
 
                     //println!("{:?}", sequences);
 
+                    println!("Original string length: {:?} bytes", suffix_arrays[0].get_underlying_kmers().get_original_string().len());
                     let result = query(suffix_arrays, sequences);
                     //println!("{:?}", result.0);
                     println!("False positive rate: {:?}", result.1);
                 },
             }
+
+            println!("total time for performing {:?} queries: {:?}", num_queries, before.elapsed());
         },
     }
 
