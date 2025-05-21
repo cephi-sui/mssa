@@ -313,7 +313,7 @@ impl QueryMode for PWLLearnedQuery {
         // Special case: add the last range
         ranges.push((curr_start_kmer, curr_start_i, sa_len - 1));
 
-        println!("number of distinct k-kmers: {:?}", ranges.len());
+        println!("Number of distinct k-kmers: {:?}", ranges.len());
 
         // Construct the piecewise approximation functions
         // (begin for the beginning of ranges, end for end)
@@ -384,7 +384,7 @@ impl Queryable for SuffixArray<PWLLearnedQuery> {
         // Get the start/end bound from the PWL function
         // TODO: should `error` be a little larger here to account for floating-point error going
         // from u128 to f64?
-        let error = self.query_mode_aux_data.gamma.ceil() as usize;
+        let error = self.query_mode_aux_data.gamma.ceil() as usize * 2 as usize;
         let first_kmer: u128 = self
             .underlying_kmers
             .kmer_to_integer(&query_super_kmers.first().unwrap().minimizer);

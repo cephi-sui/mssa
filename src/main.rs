@@ -168,7 +168,7 @@ fn main() -> Result<()> {
                 }
             }
 
-            println!("index build time: {:?}", time_elapsed);
+            println!("Index build time (ms): {:?}", time_elapsed.as_nanos() as f64 / 1000000 as f64);
         }
         Args::Query {
             fasta_file,
@@ -225,6 +225,9 @@ fn main() -> Result<()> {
         } => {
             let suffix_array_file = &mut File::open(suffix_array_file)?;
 
+            let before: Instant;
+            let time_elapsed: Duration;
+
             match query_type {
                 QueryType::GroundTruthQuery => {
                     let suffix_arrays: Vec<SuffixArray<GroundTruthQuery>> =
@@ -238,15 +241,15 @@ fn main() -> Result<()> {
                     }
 
                     let sequences = fasta::generate_sequences(suffix_arrays[0].get_underlying_kmers().get_original_string(), num_queries, match_rate, min_len, max_query_length);
-
-                    let before = Instant::now();
                     // println!("{:?}", sequences);
-
                     println!("Original string length: {:?} bytes", suffix_arrays[0].get_underlying_kmers().get_original_string().len());
+
+                    before = Instant::now();
                     let result = query(suffix_arrays, sequences);
+                    time_elapsed = before.elapsed();
+
                     // println!("{:?}", result.0);
                     println!("False positives: {:?}", result.1);
-                    println!("total time for performing {:?} queries: {:?}", num_queries, before.elapsed());
                 },
                 QueryType::StandardQuery => {
                     let suffix_arrays: Vec<SuffixArray<StandardQuery>> =
@@ -260,15 +263,15 @@ fn main() -> Result<()> {
                     }
 
                     let sequences = fasta::generate_sequences(suffix_arrays[0].get_underlying_kmers().get_original_string(), num_queries, match_rate, min_len, max_query_length);
-
-                    let before = Instant::now();
                     //println!("{:?}", sequences);
-
                     println!("Original string length: {:?} bytes", suffix_arrays[0].get_underlying_kmers().get_original_string().len());
+
+                    before = Instant::now();
                     let result = query(suffix_arrays, sequences);
+                    time_elapsed = before.elapsed();
+
                     //println!("{:?}", result);
                     println!("False positives: {:?}", result.1);
-                    println!("total time for performing {:?} queries: {:?}", num_queries, before.elapsed());
                 },
                 QueryType::BloomFilterQuery => {
                     todo!();
@@ -285,18 +288,19 @@ fn main() -> Result<()> {
                     }
 
                     let sequences = fasta::generate_sequences(suffix_arrays[0].get_underlying_kmers().get_original_string(), num_queries, match_rate, min_len, max_query_length);
-
-                    let before = Instant::now();
-
                     //println!("{:?}", sequences);
-
                     println!("Original string length: {:?} bytes", suffix_arrays[0].get_underlying_kmers().get_original_string().len());
+
+                    before = Instant::now();
                     let result = query(suffix_arrays, sequences);
+                    time_elapsed = before.elapsed();
+
                     //println!("{:?}", result.0);
                     println!("False positives: {:?}", result.1);
-                    println!("total time for performing {:?} queries: {:?}", num_queries, before.elapsed());
                 },
             }
+
+            println!("Total time (ms) for performing {:?} queries: {:?}", num_queries, time_elapsed.as_nanos() as f64 / 1000000 as f64);
         },
     }
 
