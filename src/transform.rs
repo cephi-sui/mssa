@@ -178,7 +178,14 @@ impl KmerSequence {
             .map(|window| {
                 window
                     .iter()
-                    .min_by(|&kmer1, &kmer2| occ.get(kmer1).unwrap().cmp(occ.get(kmer2).unwrap()))
+                    .min_by(|&kmer1, &kmer2| {
+                        let result = occ.get(kmer1).unwrap().cmp(occ.get(kmer2).unwrap());
+                        if result == Ordering::Equal {
+                            self.compare_kmers(kmer1, kmer2)
+                        } else {
+                            result
+                        }
+                    })
                     .unwrap()
             })
             .collect())

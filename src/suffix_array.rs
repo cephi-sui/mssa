@@ -48,7 +48,7 @@ pub trait QueryMode {
 }
 
 pub trait Queryable {
-    fn query(&self, query: &[u8]) -> (Option<usize>, bool);
+    fn query(&self, query: &[u8]) -> (Vec<usize>, usize);
 }
 
 #[derive(Encode, Decode)]
@@ -164,20 +164,23 @@ impl<T: QueryMode> SuffixArray<T> {
 
 // The ground truth query mode which performs an extremely inefficient query for testing purposes.
 impl Queryable for SuffixArray<GroundTruthQuery> {
-    fn query(&self, query: &[u8]) -> (Option<usize>, bool) {
+    fn query(&self, query: &[u8]) -> (Vec<usize>, usize) {
         let ref_str = self.underlying_kmers.get_original_string();
+        let mut result = Vec::new();
         for (i, window) in ref_str.windows(query.len()).enumerate() {
             if query == window {
-                return (Some(i), false);
+                //return (Some(i), false);
+                result.push(i);
             }
         }
-        (None, false)
+        //(None, false)
+        (result, 0)
     }
 }
 
 // The standard query mode, with no accelerant data structures
 impl Queryable for SuffixArray<StandardQuery> {
-    fn query(&self, query: &[u8]) -> (Option<usize>, bool) {
+    fn query(&self, query: &[u8]) -> (Vec<usize>, usize) {
         assert!(
             query.len() >= self.w + self.underlying_kmers.k() - 1,
             "query length was shorter than minimum length required by w + k - 1"
@@ -189,7 +192,7 @@ impl Queryable for SuffixArray<StandardQuery> {
             self.underlying_kmers.alphabet(),
         );
         let query_super_kmers = query_kmers.compute_super_kmers(self.w, self.minimizer_order, Some(&self.underlying_kmers));
-        let Some(query_super_kmers) = query_super_kmers else { return (None, false) };
+        let Some(query_super_kmers) = query_super_kmers else { return (Vec::new(), 0) };
 
         let cmp_slice_to_query = |slice: &[SuperKmer]| {
             //let l = cmp::min(slice.len(), query_super_kmers.len());
@@ -218,10 +221,13 @@ impl Queryable for SuffixArray<StandardQuery> {
 
         if left_idx == right_idx {
             // Query not present
-            return (None, false);
+            //return (None, false);
+            return (Vec::new(), 0);
         }
 
         // Query could be present anywhere in the range
+        let mut result = Vec::new();
+        let mut false_positives = 0;
         let original_string = self.underlying_kmers.get_original_string();
         for i in left_idx..right_idx {
             let super_kmers = &self.super_kmers[self.suffix_array[i]..self.super_kmers.len()]
@@ -232,17 +238,26 @@ impl Queryable for SuffixArray<StandardQuery> {
             let start_pos = first_super_kmer.start_pos;
             let end_pos = last_super_kmer.start_pos + last_super_kmer.length;
 
+            let mut found = false;
             for (i, w) in original_string[start_pos..end_pos]
                 .windows(query.len())
                 .enumerate()
             {
                 if w == query {
-                    return (Some(start_pos + i), false);
+                    //return (Some(start_pos + i), false);
+                    found = true;
+                    result.push(start_pos + i);
+                    break;
                 }
+            }
+
+            if found == false {
+                false_positives += 1;
             }
         }
 
-        (None, true)
+        //(None, true)
+        (result, false_positives)
     }
 }
 
@@ -335,7 +350,7 @@ impl QueryMode for PWLLearnedQuery {
 }
 
 impl Queryable for SuffixArray<PWLLearnedQuery> {
-    fn query(&self, query: &[u8]) -> (Option<usize>, bool) {
+    fn query(&self, query: &[u8]) -> (Vec<usize>, usize) {
         assert!(
             query.len() >= self.w + self.underlying_kmers.k() - 1,
             "query length was shorter than minimum length required by w + k - 1"
@@ -347,7 +362,7 @@ impl Queryable for SuffixArray<PWLLearnedQuery> {
             self.underlying_kmers.alphabet(),
         );
         let query_super_kmers = query_kmers.compute_super_kmers(self.w, self.minimizer_order, Some(&self.underlying_kmers));
-        let Some(query_super_kmers) = query_super_kmers else { return (None, false) };
+        let Some(query_super_kmers) = query_super_kmers else { return (Vec::new(), 0) };
 
         let cmp_slice_to_query = |slice: &[SuperKmer]| {
             let l = query_super_kmers.len();
@@ -411,10 +426,13 @@ impl Queryable for SuffixArray<PWLLearnedQuery> {
 
         if left_idx == right_idx {
             // Query not present
-            return (None, false);
+            //return (None, false);
+            return (Vec::new(), 0);
         }
 
         // Query could be present anywhere in the range
+        let mut result = Vec::new();
+        let mut false_positives = 0;
         let original_string = self.underlying_kmers.get_original_string();
         for i in left_idx..right_idx {
             let super_kmers = &self.super_kmers[suffix_array[i]..self.super_kmers.len()]
@@ -425,17 +443,26 @@ impl Queryable for SuffixArray<PWLLearnedQuery> {
             let start_pos = first_super_kmer.start_pos;
             let end_pos = last_super_kmer.start_pos + last_super_kmer.length;
 
+            let mut found = false;
             for (i, w) in original_string[start_pos..end_pos]
                 .windows(query.len())
                 .enumerate()
             {
                 if w == query {
-                    return (Some(start_pos + i), false);
+                    //return (Some(start_pos + i), false);
+                    found = true;
+                    result.push(start_pos + i);
+                    break;
                 }
+            }
+
+            if found == false {
+                false_positives += 1;
             }
         }
 
-        (None, true)
+        //(None, true)
+        (result, false_positives)
     }
 }
 

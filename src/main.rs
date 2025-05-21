@@ -187,7 +187,7 @@ fn main() -> Result<()> {
 
                     let result = query(suffix_arrays, sequences);
                     // println!("{:?}", result.0);
-                    println!("False positive rate: {:?}", result.1);
+                    println!("False positives: {:?}", result.1);
                 }
                 QueryType::StandardQuery => {
                     let suffix_arrays: Vec<SuffixArray<StandardQuery>> =
@@ -198,7 +198,7 @@ fn main() -> Result<()> {
 
                     let result = query(suffix_arrays, sequences);
                     // println!("{:?}", result.0);
-                    println!("False positive rate: {:?}", result.1);
+                    println!("False positives: {:?}", result.1);
                 }
                 QueryType::BloomFilterQuery => {
                     todo!();
@@ -212,7 +212,7 @@ fn main() -> Result<()> {
 
                     let result = query(suffix_arrays, sequences);
                     // println!("{:?}", result.0);
-                    println!("False positive rate: {:?}", result.1);
+                    println!("False positives: {:?}", result.1);
                 },
             }
         },
@@ -224,8 +224,6 @@ fn main() -> Result<()> {
             query_type,
         } => {
             let suffix_array_file = &mut File::open(suffix_array_file)?;
-
-            let before = Instant::now();
 
             match query_type {
                 QueryType::GroundTruthQuery => {
@@ -241,12 +239,14 @@ fn main() -> Result<()> {
 
                     let sequences = fasta::generate_sequences(suffix_arrays[0].get_underlying_kmers().get_original_string(), num_queries, match_rate, min_len, max_query_length);
 
+                    let before = Instant::now();
                     // println!("{:?}", sequences);
 
                     println!("Original string length: {:?} bytes", suffix_arrays[0].get_underlying_kmers().get_original_string().len());
                     let result = query(suffix_arrays, sequences);
                     // println!("{:?}", result.0);
-                    println!("False positive rate: {:?}", result.1);
+                    println!("False positives: {:?}", result.1);
+                    println!("total time for performing {:?} queries: {:?}", num_queries, before.elapsed());
                 },
                 QueryType::StandardQuery => {
                     let suffix_arrays: Vec<SuffixArray<StandardQuery>> =
@@ -261,12 +261,14 @@ fn main() -> Result<()> {
 
                     let sequences = fasta::generate_sequences(suffix_arrays[0].get_underlying_kmers().get_original_string(), num_queries, match_rate, min_len, max_query_length);
 
+                    let before = Instant::now();
                     //println!("{:?}", sequences);
 
                     println!("Original string length: {:?} bytes", suffix_arrays[0].get_underlying_kmers().get_original_string().len());
                     let result = query(suffix_arrays, sequences);
-                    //println!("{:?}", result.0);
-                    println!("False positive rate: {:?}", result.1);
+                    //println!("{:?}", result);
+                    println!("False positives: {:?}", result.1);
+                    println!("total time for performing {:?} queries: {:?}", num_queries, before.elapsed());
                 },
                 QueryType::BloomFilterQuery => {
                     todo!();
@@ -284,35 +286,38 @@ fn main() -> Result<()> {
 
                     let sequences = fasta::generate_sequences(suffix_arrays[0].get_underlying_kmers().get_original_string(), num_queries, match_rate, min_len, max_query_length);
 
+                    let before = Instant::now();
+
                     //println!("{:?}", sequences);
 
                     println!("Original string length: {:?} bytes", suffix_arrays[0].get_underlying_kmers().get_original_string().len());
                     let result = query(suffix_arrays, sequences);
                     //println!("{:?}", result.0);
-                    println!("False positive rate: {:?}", result.1);
+                    println!("False positives: {:?}", result.1);
+                    println!("total time for performing {:?} queries: {:?}", num_queries, before.elapsed());
                 },
             }
-
-            println!("total time for performing {:?} queries: {:?}", num_queries, before.elapsed());
         },
     }
 
     Ok(())
 }
 
-fn query<T: Queryable>(suffix_arrays: Vec<T>, queries: Vec<Sequence>) -> (Vec<(String, Option<usize>)>, f32) {
+fn query<T: Queryable>(suffix_arrays: Vec<T>, queries: Vec<Sequence>) -> (Vec<(String, usize)>, usize) {
     let mut result = Vec::new();
     let mut false_positives = 0;
     //for (i, suffix_array) in suffix_arrays.into_iter().enumerate() {
     for suffix_array in suffix_arrays.into_iter() {
         for query in &queries {
-            let query_result = suffix_array.query(&query.representation);
-            //result.push((i, query_result.0));
-            result.push((query.description.clone(), query_result.0));
-            false_positives += if query_result.1 { 1 } else { 0 };
+            let query_results = suffix_array.query(&query.representation);
+            false_positives += query_results.1;
+            for query_result in query_results.0 {
+                //result.push((i, query_result.0));
+                result.push((query.description.clone(), query_result));
+            }
         }
     }
-    (result, false_positives as f32 / queries.len() as f32)
+    (result, false_positives)
 }
 
 #[cfg(test)]
